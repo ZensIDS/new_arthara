@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Masuk — BerlianZStore</title>
+    <title>Masuk — Arthara.co</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -40,7 +40,7 @@
                     <span class="font-display font-bold text-amber-400 text-lg">B</span>
                 </div>  --}}
                 <div class="font-display font-semibold text-xl tracking-tight">
-                    BerlianZ<span class="text-ink/40">Store</span>
+                    Arthara<span class="text-ink/40">.co</span>
                 </div>
             </div>
 
@@ -98,7 +98,7 @@
                 </form>
             </div>
 
-            <p class="text-center text-xs text-ink/35 mt-6">&copy; {{ date('Y') }} BerlianZStore</p>
+            <p class="text-center text-xs text-ink/35 mt-6">&copy; {{ date('Y') }} Arthara.co</p>
         </div>
     </div>
 </body>

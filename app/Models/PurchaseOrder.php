@@ -40,6 +40,19 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseReturn::class);
     }
 
+    // Biaya lainnya (packing, ongkir, dll) yang diinput lewat form PO ini dan
+    // otomatis tercatat sebagai Expense — TIDAK ikut menambah total_amount/paid_amount,
+    // karena itu murni utang ke supplier dari item barang saja.
+    public function otherCosts()
+    {
+        return $this->hasMany(Expense::class);
+    }
+
+    public function getOtherCostsTotalAttribute(): float
+    {
+        return (float) $this->otherCosts()->sum('amount');
+    }
+
     public function getRemainingBalanceAttribute(): float
     {
         return (float) $this->total_amount - (float) $this->paid_amount;

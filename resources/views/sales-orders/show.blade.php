@@ -34,7 +34,7 @@
                 </span>
             </div>
             <p class="text-sm text-ink/50">
-                {{ $salesOrder->so_date->format('d M Y') }} &middot; {{ $salesOrder->customer->name ?? 'Customer umum' }}
+                {{ $salesOrder->so_date->format('d M Y') }} &middot; {{ $salesOrder->customer->name ?? '-' }}
             </p>
         </div>
 
@@ -140,6 +140,50 @@
                 @if ($salesOrder->note)
                     <div class="px-6 py-4 border-t border-ink/10 text-sm text-ink/60">
                         <span class="font-medium text-ink/70">Catatan:</span> {{ $salesOrder->note }}
+                    </div>
+                @endif
+            </div>
+
+            {{-- Biaya Lainnya --}}
+            <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden">
+                <div class="px-6 py-4 border-b border-ink/10">
+                    <h3 class="font-display font-semibold">Biaya Lainnya</h3>
+                    <p class="text-xs text-ink/50 mt-0.5">Tercatat di Pengeluaran, tidak menambah Total Transaksi di atas.</p>
+                </div>
+                @if ($salesOrder->otherCosts->isEmpty())
+                    <div class="px-6 py-8 text-center text-sm text-ink/40">Belum ada biaya lainnya untuk transaksi ini.</div>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-ink/[0.03] text-left text-ink/50">
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide">Kategori</th>
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide">Keterangan</th>
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide text-right">Jumlah</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-ink/[0.06]">
+                                @foreach ($salesOrder->otherCosts as $cost)
+                                    <tr>
+                                        <td class="px-6 py-3">
+                                            <span class="inline-flex items-center rounded-full bg-ink/[0.05] px-2.5 py-1 text-xs font-medium text-ink/70">
+                                                {{ $cost->category->name }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-3 text-ink/50">{{ $cost->description ?? '—' }}</td>
+                                        <td class="px-6 py-3 text-right tnum font-semibold text-red-700/90">Rp{{ number_format($cost->amount, 0, ',', '.') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-ink/[0.02]">
+                                    <td colspan="2" class="px-6 py-3.5 text-right font-medium text-ink/60">Total Biaya Lainnya</td>
+                                    <td class="px-6 py-3.5 text-right font-display font-semibold tnum">
+                                        Rp {{ number_format($salesOrder->other_costs_total, 0, ',', '.') }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 @endif
             </div>
@@ -335,6 +379,45 @@
         </div>
 
         <div class="space-y-6">
+
+            {{-- Estimasi untung-rugi --}}
+            <div class="rounded-2xl border border-amber-200 bg-amber-50/40 shadow-card overflow-hidden">
+                <div class="px-6 py-4 border-b border-amber-200/70 flex items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-amber-400/90 text-ink px-2.5 py-1 text-xs font-bold uppercase tracking-wide">Estimasi</span>
+                    <h3 class="font-display font-semibold">Untung-Rugi Order</h3>
+                </div>
+                <p class="px-6 pt-3 text-xs text-ink/50">
+                    Perkiraan saja untuk gambaran — diisi manual saat transaksi dibuat/diedit, tidak mempengaruhi total transaksi maupun catatan keuangan lain.
+                </p>
+
+                <div class="divide-y divide-amber-200/60 text-sm border-t border-amber-200/70 mt-3">
+                    <div class="flex items-center justify-between px-6 py-3">
+                        <span class="text-ink/60">Total Penjualan</span>
+                        <span class="tnum">Rp {{ number_format($salesOrder->total_amount, 0, ',', '.') }}</span>
+                    </div>
+                    <div class="flex items-center justify-between px-6 py-3">
+                        <span class="text-ink/60">Total HPP</span>
+                        <span class="tnum">- Rp {{ number_format($salesOrder->total_hpp, 0, ',', '.') }}</span>
+                    </div>
+                    <div class="flex items-center justify-between px-6 py-3">
+                        <span class="text-ink/60">Biaya Lainnya (tercatat)</span>
+                        <span class="tnum">- Rp {{ number_format($salesOrder->other_costs_total, 0, ',', '.') }}</span>
+                    </div>
+                    <div class="flex items-center justify-between px-6 py-3">
+                        <span class="text-ink/60">Estimasi Biaya Packing</span>
+                        <span class="tnum">- Rp {{ number_format($salesOrder->estimated_packing_cost, 0, ',', '.') }}</span>
+                    </div>
+                    <div class="flex items-center justify-between px-6 py-3.5 font-semibold bg-amber-100/70">
+                        <span>Estimasi Untung Bersih</span>
+                        <span class="tnum {{ $salesOrder->estimated_net_profit >= 0 ? 'text-emerald-700' : 'text-red-700' }}">
+                            {{ $salesOrder->estimated_net_profit >= 0 ? 'Rp' : '- Rp' }} {{ number_format(abs($salesOrder->estimated_net_profit), 0, ',', '.') }}
+                        </span>
+                    </div>
+                </div>
+                <p class="px-6 py-3 text-xs text-ink/40 border-t border-amber-200/60">
+                    Mau ubah estimasi biaya packing? <a href="{{ route('sales-orders.edit', $salesOrder) }}" class="text-amber-700 hover:text-amber-800 font-medium">Edit transaksi ini</a>.
+                </p>
+            </div>
 
             {{-- Ringkasan pembayaran --}}
             <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden">

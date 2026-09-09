@@ -26,6 +26,11 @@ class UpdatePurchaseOrderRequest extends FormRequest
             'items.*.product_id'       => ['required', 'exists:products,id'],
             'items.*.qty'              => ['required', 'integer', 'min:1'],
             'items.*.buy_price'        => ['required', 'numeric', 'min:0'],
+
+            'other_costs'                             => ['nullable', 'array'],
+            'other_costs.*.expense_category_id'       => ['required', 'exists:expense_categories,id'],
+            'other_costs.*.amount'                     => ['required', 'numeric', 'min:0'],
+            'other_costs.*.description'                => ['nullable', 'string', 'max:255'],
         ];
     }
 

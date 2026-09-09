@@ -7,7 +7,9 @@
     x-data="poCreateForm(
         {{ Illuminate\Support\Js::from($suppliers) }},
         {{ Illuminate\Support\Js::from($products) }},
-        {{ Illuminate\Support\Js::from(old('items', [['product_id' => '', 'qty' => 1, 'buy_price' => '']])) }}
+        {{ Illuminate\Support\Js::from(old('items', [['product_id' => '', 'qty' => 1, 'buy_price' => '']])) }},
+        {{ Illuminate\Support\Js::from($expenseCategories) }},
+        {{ Illuminate\Support\Js::from(old('other_costs', [])) }}
     )"
     x-cloak
 >
@@ -124,6 +126,72 @@
         </div>
         @error('items')<p class="text-xs text-red-600 -mt-4 mb-6">{{ $message }}</p>@enderror
 
+        {{-- Biaya lainnya --}}
+        <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-ink/10 flex items-center justify-between">
+                <div>
+                    <h3 class="font-display font-semibold">Biaya Lainnya</h3>
+                    <p class="text-xs text-ink/50 mt-0.5">Opsional — packing, ongkir, dll. Otomatis tercatat sebagai Pengeluaran, tidak menambah Total PO di atas.</p>
+                </div>
+                <button type="button" @click="addOtherCost()"
+                        class="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 shrink-0">
+                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Tambah Biaya
+                </button>
+            </div>
+
+            <div class="divide-y divide-ink/[0.06]" x-show="otherCosts.length > 0">
+                <template x-for="(cost, index) in otherCosts" :key="cost.key">
+                    <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
+                        <div class="@4xl:col-span-4">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Kategori</label>
+                            <div class="relative">
+                                <select :name="'other_costs['+index+'][expense_category_id]'" x-init="initExpenseCategorySelect($el, cost)">
+                                    <option value="">— Pilih kategori —</option>
+                                    <template x-for="c in expenseCategories" :key="c.id">
+                                        <option :value="c.id" x-text="c.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="@4xl:col-span-3">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Jumlah</label>
+                            <div class="relative">
+                                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
+                                <input type="text" inputmode="numeric"
+                                       :value="formatRupiah(cost.amount)"
+                                       @input="cost.amount = parseRupiah($event.target.value); $event.target.value = formatRupiah(cost.amount)"
+                                       class="w-full rounded-xl border border-ink/12 pl-9 pr-3.5 py-2.5 text-sm tnum focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                                <input type="hidden" :name="'other_costs['+index+'][amount]'" :value="cost.amount">
+                            </div>
+                        </div>
+
+                        <div class="@4xl:col-span-4">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Keterangan</label>
+                            <input type="text" :name="'other_costs['+index+'][description]'" x-model="cost.description" placeholder="Opsional"
+                                   class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                        </div>
+
+                        <div class="@4xl:col-span-1 flex sm:justify-end sm:pt-6">
+                            <button type="button" @click="removeOtherCost(cost.key)"
+                                    class="text-red-600/70 hover:text-red-700 p-1.5" title="Hapus baris">
+                                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="px-6 py-4 bg-ink/[0.02] flex items-center justify-between" x-show="otherCosts.length > 0">
+                <span class="text-sm font-medium text-ink/60">Total Biaya Lainnya</span>
+                <span class="font-display font-semibold text-lg tnum" x-text="'Rp ' + formatRupiah(otherCostsTotal)"></span>
+            </div>
+
+            <p class="px-6 py-5 text-sm text-ink/40" x-show="otherCosts.length === 0">Belum ada biaya lainnya ditambahkan.</p>
+        </div>
+        @error('other_costs')<p class="text-xs text-red-600 -mt-4 mb-6">{{ $message }}</p>@enderror
+
         {{-- Pembayaran awal --}}
         <div class="rounded-2xl border border-ink/10 bg-white shadow-card p-6 mb-6">
             <h3 class="font-display font-semibold mb-1">Pembayaran Awal</h3>
@@ -167,15 +235,22 @@
 
 @push('scripts')
 <script>
-    function poCreateForm(suppliers, products, initialItems) {
+    function poCreateForm(suppliers, products, initialItems, expenseCategories, initialOtherCosts) {
         return {
             suppliers,
             products,
+            expenseCategories,
             items: initialItems.map(i => ({
                 key: Math.random().toString(36).slice(2),
                 product_id: i.product_id || '',
                 qty: i.qty || 1,
                 buy_price: i.buy_price || '',
+            })),
+            otherCosts: initialOtherCosts.map(c => ({
+                key: Math.random().toString(36).slice(2),
+                expense_category_id: c.expense_category_id || '',
+                amount: c.amount || '',
+                description: c.description || '',
             })),
             initialPayment: {{ (int) old('initial_payment', 0) }} || '',
             paymentMethod: '{{ old('payment_method', 'cash') }}',
@@ -189,6 +264,14 @@
                 this.items = this.items.filter(i => i.key !== key);
             },
 
+            addOtherCost() {
+                this.otherCosts.push({ key: Math.random().toString(36).slice(2), expense_category_id: '', amount: '', description: '' });
+            },
+
+            removeOtherCost(key) {
+                this.otherCosts = this.otherCosts.filter(c => c.key !== key);
+            },
+
             currentStock(productId) {
                 const p = this.products.find(p => p.id == productId);
                 return p ? p.qty_on_hand + ' ' + p.unit : '—';
@@ -196,6 +279,10 @@
 
             get total() {
                 return this.items.reduce((sum, i) => sum + ((parseInt(i.qty) || 0) * (parseFloat(i.buy_price) || 0)), 0);
+            },
+
+            get otherCostsTotal() {
+                return this.otherCosts.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
             },
 
             initSupplierSelect(el) {
@@ -235,6 +322,24 @@
 
                 if (item.product_id) {
                     this.$nextTick(() => $(el).val(String(item.product_id)).trigger('change.select2'));
+                }
+            },
+
+            // Kategori pengeluaran bisa banyak, jadi pakai select2 supaya bisa
+            // dicari, sama seperti produk. Beda dengan produk, kategori BOLEH
+            // dipilih berulang di baris lain (mis. 2 baris sama-sama "Ongkir"),
+            // jadi tidak perlu guard anti-duplikat.
+            initExpenseCategorySelect(el, cost) {
+                $(el).select2({
+                    placeholder: '— Pilih kategori —',
+                    width: '100%',
+                    dropdownParent: $('body'),
+                }).on('change', function () {
+                    cost.expense_category_id = $(this).val();
+                });
+
+                if (cost.expense_category_id) {
+                    this.$nextTick(() => $(el).val(String(cost.expense_category_id)).trigger('change.select2'));
                 }
             },
         };

@@ -20,7 +20,7 @@ class ExpenseController extends Controller
         $search    = trim((string) $request->input('search', ''));
 
         $expenses = Expense::query()
-            ->with('category:id,name') // hanya kolom yang dipakai di tabel
+            ->with(['category:id,name', 'purchaseOrder:id,po_number', 'salesOrder:id,so_number']) // hanya kolom yang dipakai di tabel
             ->when($startDate, fn($q) => $q->whereDate('expense_date', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('expense_date', '<=', $endDate))
             ->when($search !== '', function ($q) use ($search) {
@@ -57,6 +57,18 @@ class ExpenseController extends Controller
 
     public function update(UpdateExpenseRequest $request, Expense $expense)
     {
+        if ($expense->purchase_order_id) {
+            return response()->json([
+                'message' => 'Biaya ini berasal dari PO ' . ($expense->purchaseOrder->po_number ?? '') . ' dan hanya bisa diubah lewat halaman PO tersebut.',
+            ], 422);
+        }
+
+        if ($expense->sales_order_id) {
+            return response()->json([
+                'message' => 'Biaya ini berasal dari SO ' . ($expense->salesOrder->so_number ?? '') . ' dan hanya bisa diubah lewat halaman SO tersebut.',
+            ], 422);
+        }
+
         $this->service->update($expense, $request->validated());
 
         return response()->json([
@@ -67,6 +79,18 @@ class ExpenseController extends Controller
 
     public function destroy(Expense $expense)
     {
+        if ($expense->purchase_order_id) {
+            return response()->json([
+                'message' => 'Biaya ini berasal dari PO ' . ($expense->purchaseOrder->po_number ?? '') . ' dan hanya bisa dihapus lewat halaman PO tersebut.',
+            ], 422);
+        }
+
+        if ($expense->sales_order_id) {
+            return response()->json([
+                'message' => 'Biaya ini berasal dari SO ' . ($expense->salesOrder->so_number ?? '') . ' dan hanya bisa dihapus lewat halaman SO tersebut.',
+            ], 422);
+        }
+
         $this->service->delete($expense);
 
         return response()->json([

@@ -52,7 +52,7 @@
                 <span class="font-display font-bold text-ink text-sm">B</span>
             </span>
             <a href="{{ route('dashboard') }}" class="font-display font-semibold text-lg tracking-tight">
-                BerlianZ<span class="text-white/40">Store</span>
+                Arthara<span class="text-white/40">.co</span>
             </a>
         </div>
 

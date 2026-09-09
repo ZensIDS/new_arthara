@@ -112,6 +112,50 @@
                 @endif
             </div>
 
+            {{-- Biaya Lainnya --}}
+            <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden">
+                <div class="px-6 py-4 border-b border-ink/10">
+                    <h3 class="font-display font-semibold">Biaya Lainnya</h3>
+                    <p class="text-xs text-ink/50 mt-0.5">Tercatat di Pengeluaran, tidak menambah Total PO di atas.</p>
+                </div>
+                @if ($purchaseOrder->otherCosts->isEmpty())
+                    <div class="px-6 py-8 text-center text-sm text-ink/40">Belum ada biaya lainnya untuk PO ini.</div>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-ink/[0.03] text-left text-ink/50">
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide">Kategori</th>
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide">Keterangan</th>
+                                    <th class="px-6 py-3 font-semibold text-xs uppercase tracking-wide text-right">Jumlah</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-ink/[0.06]">
+                                @foreach ($purchaseOrder->otherCosts as $cost)
+                                    <tr>
+                                        <td class="px-6 py-3">
+                                            <span class="inline-flex items-center rounded-full bg-ink/[0.05] px-2.5 py-1 text-xs font-medium text-ink/70">
+                                                {{ $cost->category->name }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-3 text-ink/50">{{ $cost->description ?? '—' }}</td>
+                                        <td class="px-6 py-3 text-right tnum font-semibold text-red-700/90">Rp{{ number_format($cost->amount, 0, ',', '.') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-ink/[0.02]">
+                                    <td colspan="2" class="px-6 py-3.5 text-right font-medium text-ink/60">Total Biaya Lainnya</td>
+                                    <td class="px-6 py-3.5 text-right font-display font-semibold tnum">
+                                        Rp {{ number_format($purchaseOrder->other_costs_total, 0, ',', '.') }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                @endif
+            </div>
+
             {{-- Retur Pembelian --}}
             <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden">
                 <div class="px-6 py-4 border-b border-ink/10">

@@ -12,6 +12,7 @@ class PurchaseOrderService
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
         protected DocumentNumberService $numberService,
+        protected ExpenseService $expenseService,
     ) {}
 
     /**
@@ -23,10 +24,14 @@ class PurchaseOrderService
      *                     kalau tidak diisi akan digenerate otomatis: PO/{Bulan Romawi}/{Tahun}/{Urut}
      * @param array $items [['product_id', 'qty', 'buy_price'], ...]
      * @param float|null $initialPayment jumlah bayar awal (null = belum bayar sama sekali)
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — biaya
+     *                          tambahan (packing, ongkir, dll), opsional & boleh lebih dari satu.
+     *                          Tiap baris otomatis jadi record Expense terpisah yang terhubung ke
+     *                          PO ini, TAPI tidak menambah total_amount/paid_amount PO.
      */
-    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash'): PurchaseOrder
+    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): PurchaseOrder
     {
-        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod) {
+        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod, $otherCosts) {
             $totalAmount = 0;
             foreach ($items as $item) {
                 $totalAmount += $item['qty'] * $item['buy_price'];
@@ -53,12 +58,40 @@ class PurchaseOrderService
                 $this->stockService->receiveFromPurchaseItem($poItem, $po->po_date);
             }
 
+            $this->syncOtherCosts($po, $otherCosts);
+
             if ($initialPayment && $initialPayment > 0) {
                 $this->addPayment($po, $po->po_date, $initialPayment, $paymentMethod, 'Pembayaran awal saat PO dibuat');
             }
 
-            return $po->fresh(['items', 'payments']);
+            return $po->fresh(['items', 'payments', 'otherCosts']);
         });
+    }
+
+    /**
+     * Ganti seluruh biaya lainnya (Expense) milik PO ini dengan set yang baru.
+     * Dipakai saat create (dari kosong) maupun update (replace total). Expense
+     * lama dihapus lewat ExpenseService::delete() supaya cash_flow terkait ikut
+     * dibersihkan, baru dibuat expense baru lewat ExpenseService::create() supaya
+     * cash_flow baru ikut tercatat — konsisten dengan cara item PO di-replace.
+     *
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...]
+     */
+    protected function syncOtherCosts(PurchaseOrder $po, array $otherCosts): void
+    {
+        foreach ($po->otherCosts()->get() as $oldExpense) {
+            $this->expenseService->delete($oldExpense);
+        }
+
+        foreach ($otherCosts as $cost) {
+            $this->expenseService->create([
+                'expense_category_id' => $cost['expense_category_id'],
+                'purchase_order_id'   => $po->id,
+                'expense_date'        => $po->po_date,
+                'amount'              => $cost['amount'],
+                'description'         => $cost['description'] ?? "Biaya tambahan PO #{$po->po_number}",
+            ]);
+        }
     }
 
     /**
@@ -155,13 +188,15 @@ class PurchaseOrderService
      *
      * @param array $data ['supplier_id', 'po_date', 'note']
      * @param array $items [['product_id', 'qty', 'buy_price'], ...]
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — akan
+     *                          MENGGANTI seluruh biaya lainnya lama milik PO ini (lihat syncOtherCosts).
      *
      * @throws \RuntimeException kalau ada batch yang sudah kepakai, atau
      *                            total baru lebih kecil dari paid_amount
      */
-    public function update(PurchaseOrder $po, array $data, array $items): PurchaseOrder
+    public function update(PurchaseOrder $po, array $data, array $items, array $otherCosts = []): PurchaseOrder
     {
-        return DB::transaction(function () use ($po, $data, $items) {
+        return DB::transaction(function () use ($po, $data, $items, $otherCosts) {
             $po->loadMissing('items.stockBatch');
 
             $this->guardCanModify($po);
@@ -201,7 +236,9 @@ class PurchaseOrderService
                 $this->stockService->receiveFromPurchaseItem($poItem, $po->po_date);
             }
 
-            return $po->fresh(['items', 'payments']);
+            $this->syncOtherCosts($po, $otherCosts);
+
+            return $po->fresh(['items', 'payments', 'otherCosts']);
         });
     }
 
@@ -221,7 +258,7 @@ class PurchaseOrderService
     public function delete(PurchaseOrder $po): void
     {
         DB::transaction(function () use ($po) {
-            $po->loadMissing('items.stockBatch', 'payments');
+            $po->loadMissing('items.stockBatch', 'payments', 'otherCosts');
 
             $this->guardCanModify($po);
 
@@ -231,6 +268,13 @@ class PurchaseOrderService
 
             foreach ($po->payments as $payment) {
                 $this->cashFlowService->deleteForSource($payment);
+            }
+
+            // Biaya lainnya (Expense) turunan PO ini dihapus lewat ExpenseService
+            // supaya cash_flow terkait ikut dibersihkan (bukan lewat cascadeOnDelete
+            // DB saja, karena itu tidak akan menyentuh tabel cash_flows).
+            foreach ($po->otherCosts as $expense) {
+                $this->expenseService->delete($expense);
             }
 
             // items & payments ikut terhapus otomatis (cascadeOnDelete di migration)

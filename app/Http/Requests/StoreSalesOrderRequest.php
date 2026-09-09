@@ -19,6 +19,7 @@ class StoreSalesOrderRequest extends FormRequest
             'so_date'       => ['required', 'date'],
             'note'          => ['nullable', 'string', 'max:1000'],
             'source_id'     => ['required', 'exists:sale_sources,id'],
+            'estimated_packing_cost' => ['nullable', 'numeric', 'min:0'],
 
             'items'                    => ['required', 'array', 'min:1'],
             'items.*.product_id'       => ['required', 'exists:products,id'],
@@ -27,6 +28,11 @@ class StoreSalesOrderRequest extends FormRequest
 
             'initial_payment'          => ['nullable', 'numeric', 'min:0'],
             'payment_method'           => ['nullable', 'in:cash,transfer,other'],
+
+            'other_costs'                             => ['nullable', 'array'],
+            'other_costs.*.expense_category_id'       => ['required', 'exists:expense_categories,id'],
+            'other_costs.*.amount'                     => ['required', 'numeric', 'min:0'],
+            'other_costs.*.description'                => ['nullable', 'string', 'max:255'],
         ];
     }
 

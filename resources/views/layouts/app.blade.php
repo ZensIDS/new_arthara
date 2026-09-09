@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') — BerlianzStore</title>
+    <title>@yield('title', 'Dashboard') — Arthara.co</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -68,7 +68,7 @@
         .scroll-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 999px; }
         .scroll-thin-light::-webkit-scrollbar-thumb { background: rgba(17,18,20,0.15); border-radius: 999px; }
 
-        /* ===== Select2 — retema supaya menyatu dengan desain BerlianzStore ===== */
+        /* ===== Select2 — retema supaya menyatu dengan desain Arthara.co ===== */
         .select2-container { width: 100% !important; font-family: 'Inter', sans-serif; }
         .select2-container--default .select2-selection--single {
             height: 42px;

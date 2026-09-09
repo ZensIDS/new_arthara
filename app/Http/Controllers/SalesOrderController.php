@@ -7,6 +7,7 @@ use App\Http\Requests\StoreSalesPaymentRequest;
 use App\Http\Requests\UpdateSalesOrderRequest;
 use App\Http\Requests\UpdateSalesPaymentRequest;
 use App\Models\Customer;
+use App\Models\ExpenseCategory;
 use App\Models\Product;
 use App\Models\SaleSource;
 use App\Models\SalesOrder;
@@ -27,6 +28,9 @@ class SalesOrderController extends Controller
 
         $salesOrders = SalesOrder::query()
             ->with(['customer:id,name', 'source:id,name']) // hanya kolom yang dipakai di tabel
+            // Dipakai buat kolom "Estimasi Untung" di tabel tanpa N+1 query
+            // (accessor other_costs_total sendiri query per-baris kalau dipanggil langsung).
+            ->withSum('otherCosts as other_costs_sum', 'amount')
             ->when($startDate, fn($q) => $q->whereDate('so_date', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('so_date', '<=', $endDate))
             ->when($search !== '', function ($q) use ($search) {
@@ -104,13 +108,14 @@ class SalesOrderController extends Controller
         $customers = Customer::orderBy('name')->get(['id', 'name']);
         $products = $this->productsForForm();
         $sources = SaleSource::orderBy('name')->get(['id', 'name']);
+        $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
 
-        return view('sales-orders.create', compact('customers', 'products', 'sources'));
+        return view('sales-orders.create', compact('customers', 'products', 'sources', 'expenseCategories'));
     }
 
     public function show(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer', 'source', 'items.product', 'items.allocations.stockBatch', 'items.returnItems', 'payments', 'returns.items.product']);
+        $salesOrder->load(['customer', 'source', 'items.product', 'items.allocations.stockBatch', 'items.returnItems', 'payments', 'returns.items.product', 'otherCosts.category']);
 
         return view('sales-orders.show', compact('salesOrder'));
     }
@@ -121,10 +126,11 @@ class SalesOrderController extends Controller
         // Satu-satunya hal yang benar-benar memblokir adalah kalau ada item dari
         // SO ini yang sudah pernah diretur customer — itu baru ketahuan saat
         // submit (lihat SalesOrderService::guardCanModify), errornya ditangkap di update().
-        $salesOrder->load('items');
+        $salesOrder->load(['items', 'otherCosts']);
 
         $customers = Customer::orderBy('name')->get(['id', 'name']);
         $sources = SaleSource::orderBy('name')->get(['id', 'name']);
+        $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
         // Saat edit, qty yang lagi dipakai transaksi ini sendiri harus dianggap
         // "tersedia lagi" di form (supaya user bisa submit ulang qty yang sama
         // tanpa kena validasi stok kurang) — tambahkan balik qty existing per produk.
@@ -134,7 +140,7 @@ class SalesOrderController extends Controller
             $product->qty_on_hand += (int) ($existingQtyByProduct->get($product->id) ?? 0);
         });
 
-        return view('sales-orders.edit', compact('salesOrder', 'customers', 'products', 'sources'));
+        return view('sales-orders.edit', compact('salesOrder', 'customers', 'products', 'sources', 'expenseCategories'));
     }
 
     public function update(UpdateSalesOrderRequest $request, SalesOrder $salesOrder)
@@ -149,8 +155,10 @@ class SalesOrderController extends Controller
                     'so_date'     => $validated['so_date'],
                     'note'        => $validated['note'] ?? null,
                     'source_id'   => $validated['source_id'],
+                    'estimated_packing_cost' => $validated['estimated_packing_cost'] ?? 0,
                 ],
                 items: $validated['items'],
+                otherCosts: $validated['other_costs'] ?? [],
             );
         } catch (\RuntimeException $e) {
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
@@ -189,10 +197,12 @@ class SalesOrderController extends Controller
                     'so_date'     => $validated['so_date'],
                     'note'        => $validated['note'] ?? null,
                     'source_id'   => $validated['source_id'],
+                    'estimated_packing_cost' => $validated['estimated_packing_cost'] ?? 0,
                 ],
                 items: $validated['items'],
                 initialPayment: $validated['initial_payment'] ?? null,
                 paymentMethod: $validated['payment_method'] ?? 'cash',
+                otherCosts: $validated['other_costs'] ?? [],
             );
         } catch (\RuntimeException $e) {
             // Termasuk error "stok tidak mencukupi" dari StockService::allocateFifo()

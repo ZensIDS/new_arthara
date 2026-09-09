@@ -16,6 +16,7 @@
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Customer</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Total</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Sisa Piutang</th>
+                        <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Estimasi Untung</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Status</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Aksi</th>
                     </tr>
@@ -25,10 +26,21 @@
                         <tr class="hover:bg-amber-50/40 transition-colors">
                             <td class="px-5 py-3.5 font-medium tnum">{{ $so->so_number }}</td>
                             <td class="px-5 py-3.5 text-ink/60 tnum">{{ $so->so_date->format('d M Y') }}</td>
-                            <td class="px-5 py-3.5">{{ $so->customer->name ?? 'Customer umum' }}</td>
+                            <td class="px-5 py-3.5">{{ $so->customer->name ?? '-' }}</td>
                             <td class="px-5 py-3.5 text-right tnum">Rp {{ number_format($so->total_amount, 0, ',', '.') }}</td>
                             <td class="px-5 py-3.5 text-right tnum {{ $so->remaining_balance > 0 ? 'text-red-700 font-medium' : 'text-ink/40' }}">
                                 Rp {{ number_format($so->remaining_balance, 0, ',', '.') }}
+                            </td>
+                            @php
+                                // other_costs_sum dari withSum di controller (hindari N+1); fallback ke
+                                // accessor kalau suatu saat partial ini dirender tanpa withSum tsb.
+                                $estimatedNetProfit = (float) $so->total_amount
+                                    - (float) $so->total_hpp
+                                    - (float) ($so->other_costs_sum ?? $so->other_costs_total)
+                                    - (float) $so->estimated_packing_cost;
+                            @endphp
+                            <td class="px-5 py-3.5 text-right tnum {{ $estimatedNetProfit >= 0 ? 'text-emerald-700' : 'text-red-700' }}" title="Perkiraan saja, termasuk estimasi biaya packing manual">
+                                {{ $estimatedNetProfit >= 0 ? 'Rp' : '- Rp' }} {{ number_format(abs($estimatedNetProfit), 0, ',', '.') }}
                             </td>
                             <td class="px-5 py-3.5">
                                 @php
@@ -55,7 +67,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-5 py-10 text-center text-ink/40">
+                            <td colspan="8" class="px-5 py-10 text-center text-ink/40">
                                 {{ request('search') ? 'Tidak ada transaksi yang cocok dengan pencarian.' : 'Belum ada transaksi penjualan.' }}
                             </td>
                         </tr>

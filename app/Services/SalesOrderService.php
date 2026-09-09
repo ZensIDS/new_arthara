@@ -13,19 +13,24 @@ class SalesOrderService
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
         protected DocumentNumberService $numberService,
+        protected ExpenseService $expenseService,
     ) {}
 
     /**
      * Buat SO lengkap dengan item-itemnya, otomatis alokasikan stok
      * secara FIFO per item dan hitung HPP riil.
      *
-     * @param array $data ['customer_id', 'so_date', 'note'] — 'so_number' opsional,
+     * @param array $data ['customer_id', 'so_date', 'note', 'source_id', 'estimated_packing_cost'] — 'so_number' opsional,
      *                     kalau tidak diisi akan digenerate otomatis: SO/{Bulan Romawi}/{Tahun}/{Urut}
      * @param array $items [['product_id', 'qty', 'sell_price'], ...]
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — biaya
+     *                          tambahan (packing, ongkir, dll), opsional & boleh lebih dari satu.
+     *                          Tiap baris otomatis jadi record Expense terpisah yang terhubung ke
+     *                          SO ini, TAPI tidak menambah total_amount/paid_amount SO.
      */
-    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash'): SalesOrder
+    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): SalesOrder
     {
-        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod) {
+        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod, $otherCosts) {
             $totalAmount = 0;
             foreach ($items as $item) {
                 $totalAmount += $item['qty'] * $item['sell_price'];
@@ -74,12 +79,40 @@ class SalesOrderService
 
             $so->update(['total_hpp' => $totalHpp]);
 
+            $this->syncOtherCosts($so, $otherCosts);
+
             if ($initialPayment && $initialPayment > 0) {
                 $this->addPayment($so, $so->so_date, $initialPayment, $paymentMethod, 'Pembayaran awal saat transaksi');
             }
 
-            return $so->fresh(['items.allocations', 'payments']);
+            return $so->fresh(['items.allocations', 'payments', 'otherCosts']);
         });
+    }
+
+    /**
+     * Ganti seluruh biaya lainnya (Expense) milik SO ini dengan set yang baru.
+     * Dipakai saat create (dari kosong) maupun update (replace total). Expense
+     * lama dihapus lewat ExpenseService::delete() supaya cash_flow terkait ikut
+     * dibersihkan, baru dibuat expense baru lewat ExpenseService::create() supaya
+     * cash_flow baru ikut tercatat — konsisten dengan cara item PO/SO di-replace.
+     *
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...]
+     */
+    protected function syncOtherCosts(SalesOrder $so, array $otherCosts): void
+    {
+        foreach ($so->otherCosts()->get() as $oldExpense) {
+            $this->expenseService->delete($oldExpense);
+        }
+
+        foreach ($otherCosts as $cost) {
+            $this->expenseService->create([
+                'expense_category_id' => $cost['expense_category_id'],
+                'sales_order_id'      => $so->id,
+                'expense_date'        => $so->so_date,
+                'amount'              => $cost['amount'],
+                'description'         => $cost['description'] ?? "Biaya tambahan SO #{$so->so_number}",
+            ]);
+        }
     }
 
     public function addPayment(SalesOrder $so, string $date, float $amount, string $method = 'cash', ?string $note = null): SalesPayment
@@ -108,7 +141,7 @@ class SalesOrderService
                 $date,
                 $amount,
                 $payment,
-                "Pembayaran SO #{$so->so_number} dari " . ($so->customer->name ?? 'Customer umum')
+                "Pembayaran SO #{$so->so_number} dari " . ($so->customer->name ?? '-')
             );
 
             return $payment;
@@ -170,16 +203,18 @@ class SalesOrderService
      * lebih kecil dari yang sudah dibayar, ditolak — user harus koreksi/
      * hapus pembayaran dulu supaya tidak terjadi kondisi "kelebihan bayar".
      *
-     * @param array $data ['customer_id', 'so_date', 'note', 'source_id']
+     * @param array $data ['customer_id', 'so_date', 'note', 'source_id', 'estimated_packing_cost']
      * @param array $items [['product_id', 'qty', 'sell_price'], ...]
+     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — akan
+     *                          MENGGANTI seluruh biaya lainnya lama milik SO ini (lihat syncOtherCosts).
      *
      * @throws \RuntimeException kalau ada item yang sudah diretur, stok tidak
      *                            cukup untuk item baru, atau total baru lebih
      *                            kecil dari paid_amount
      */
-    public function update(SalesOrder $so, array $data, array $items): SalesOrder
+    public function update(SalesOrder $so, array $data, array $items, array $otherCosts = []): SalesOrder
     {
-        return DB::transaction(function () use ($so, $data, $items) {
+        return DB::transaction(function () use ($so, $data, $items, $otherCosts) {
             $so->loadMissing('items.allocations');
 
             $this->guardCanModify($so);
@@ -209,6 +244,7 @@ class SalesOrderService
                 'so_date'        => $data['so_date'],
                 'note'           => $data['note'] ?? null,
                 'source_id'      => $data['source_id'] ?? $so->source_id,
+                'estimated_packing_cost' => $data['estimated_packing_cost'] ?? $so->estimated_packing_cost,
                 'total_amount'   => $totalAmount,
                 'total_hpp'      => 0,
                 'payment_status' => $this->resolvePaymentStatus($totalAmount, (float) $so->paid_amount),
@@ -246,7 +282,9 @@ class SalesOrderService
 
             $so->update(['total_hpp' => $totalHpp]);
 
-            return $so->fresh(['items.allocations', 'payments']);
+            $this->syncOtherCosts($so, $otherCosts);
+
+            return $so->fresh(['items.allocations', 'payments', 'otherCosts']);
         });
     }
 
@@ -263,7 +301,7 @@ class SalesOrderService
     public function delete(SalesOrder $so): void
     {
         DB::transaction(function () use ($so) {
-            $so->loadMissing('items.allocations', 'payments');
+            $so->loadMissing('items.allocations', 'payments', 'otherCosts');
 
             $this->guardCanModify($so);
 
@@ -277,6 +315,13 @@ class SalesOrderService
 
             foreach ($so->payments as $payment) {
                 $this->cashFlowService->deleteForSource($payment);
+            }
+
+            // Biaya lainnya (Expense) turunan SO ini dihapus lewat ExpenseService
+            // supaya cash_flow terkait ikut dibersihkan (bukan lewat cascadeOnDelete
+            // DB saja, karena itu tidak akan menyentuh tabel cash_flows).
+            foreach ($so->otherCosts as $expense) {
+                $this->expenseService->delete($expense);
             }
 
             // items & payments ikut terhapus otomatis (cascadeOnDelete di migration)
