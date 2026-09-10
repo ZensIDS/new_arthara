@@ -49,7 +49,7 @@
         {{-- Brand --}}
         <div class="h-16 flex items-center gap-2.5 px-6 border-b border-white/10 shrink-0">
             <span class="h-7 w-7 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
-                <span class="font-display font-bold text-ink text-sm">B</span>
+                <span class="font-display font-bold text-ink text-sm">A</span>
             </span>
             <a href="{{ route('dashboard') }}" class="font-display font-semibold text-lg tracking-tight">
                 Arthara<span class="text-white/40">.co</span>

@@ -11,32 +11,24 @@ class SupplierSeeder extends Seeder
     {
         $suppliers = [
             [
-                'name'           => 'PT Sumber Makmur Sejahtera',
-                'contact_person' => 'Budi Santoso',
-                'phone'          => '081234567801',
-                'email'          => 'budi@sumbermakmur.co.id',
-                'address'        => 'Jl. Industri Raya No. 12, Surabaya',
+                'name'           => 'Anandam.id',
+                'address'        => 'Yogyakarta',
             ],
             [
-                'name'           => 'CV Berkah Distribusi',
-                'contact_person' => 'Siti Aminah',
-                'phone'          => '081234567802',
-                'email'          => 'siti@berkahdistribusi.com',
-                'address'        => 'Jl. Ahmad Yani No. 45, Kediri',
+                'name'           => 'Computa',
+                'address'        => 'Yogyakarta',
             ],
             [
-                'name'           => 'UD Jaya Abadi',
-                'contact_person' => 'Hendra Wijaya',
-                'phone'          => '081234567803',
-                'email'          => 'hendra@jayaabadi.id',
-                'address'        => 'Jl. Diponegoro No. 8, Malang',
+                'name'           => 'ELS.ID',
+                'address'        => 'Yogyakarta',
             ],
             [
-                'name'           => 'PT Cahaya Nusantara',
-                'contact_person' => 'Rina Kartika',
-                'phone'          => '081234567804',
-                'email'          => 'rina@cahayanusantara.co.id',
-                'address'        => 'Jl. Gajah Mada No. 21, Kediri',
+                'name'           => 'Go Computer',
+                'address'        => 'Yogyakarta',
+            ],
+            [
+                'name'           => 'Kurdi Jaya',
+                'address'        => 'Pacitan',
             ],
         ];
 

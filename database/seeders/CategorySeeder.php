@@ -11,12 +11,13 @@ class CategorySeeder extends Seeder
     public function run()
     {
         $categories = [
-            ['name' => 'Sembako', 'description' => 'Kebutuhan pokok sehari-hari'],
-            ['name' => 'Minuman', 'description' => 'Minuman kemasan & botol'],
-            ['name' => 'Makanan Ringan', 'description' => 'Snack dan camilan'],
-            ['name' => 'Perlengkapan Rumah Tangga', 'description' => 'Peralatan kebutuhan rumah'],
-            ['name' => 'Kebersihan & Perawatan', 'description' => 'Sabun, deterjen, produk perawatan diri'],
-            ['name' => 'Alat Tulis Kantor', 'description' => 'ATK dan perlengkapan kantor'],
+            ['name' => 'ATK', 'description' => '-'],
+            ['name' => 'Apparel', 'description' => '-'],
+            ['name' => 'Elektronik', 'description' => '-'],
+            ['name' => 'HP', 'description' => '-'],
+            ['name' => 'Laptop', 'description' => '-'],
+            ['name' => 'Gerabah', 'description' => '-'],
+            ['name' => 'Kopi', 'description' => '-'],
         ];
 
         foreach ($categories as $category) {

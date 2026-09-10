@@ -9,7 +9,7 @@ class SaleSourceSeeder extends Seeder
 {
     public function run(): void
     {
-        $sources = ['Offline', 'WhatsApp', 'Shopee', 'Tokopedia'];
+        $sources = ['Offline', 'WhatsApp', 'Shopee', 'TikTok'];
 
         foreach ($sources as $name) {
             SaleSource::firstOrCreate(['name' => $name]);
