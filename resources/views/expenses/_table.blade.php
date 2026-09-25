@@ -20,6 +20,7 @@
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Kategori</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Keterangan</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Sumber</th>
+                        <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Kas</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Jumlah</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Aksi</th>
                     </tr>
@@ -53,6 +54,7 @@
                                     <span class="text-xs text-ink/35">Manual</span>
                                 @endif
                             </td>
+                            <td class="px-5 py-3.5 text-ink/60">{{ $expense->cash->name ?? '—' }}</td>
                             <td class="px-5 py-3.5 text-right tnum font-semibold text-red-700/90">Rp{{ number_format($expense->amount, 0, ',', '.') }}</td>
                             <td class="px-5 py-3.5 text-right">
                                 @if ($expense->purchase_order_id)
@@ -73,7 +75,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-5 py-10 text-center text-ink/40">
+                            <td colspan="7" class="px-5 py-10 text-center text-ink/40">
                                 {{ request('search') ? 'Tidak ada catatan biaya yang cocok dengan pencarian.' : 'Belum ada catatan biaya.' }}
                             </td>
                         </tr>

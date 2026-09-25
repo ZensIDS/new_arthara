@@ -9,7 +9,8 @@
         {{ Illuminate\Support\Js::from($products) }},
         {{ Illuminate\Support\Js::from(old('items', [['product_id' => '', 'qty' => 1, 'buy_price' => '']])) }},
         {{ Illuminate\Support\Js::from($expenseCategories) }},
-        {{ Illuminate\Support\Js::from(old('other_costs', [])) }}
+        {{ Illuminate\Support\Js::from(old('other_costs', [])) }},
+        {{ Illuminate\Support\Js::from($cashes) }}
     )"
     x-cloak
 >
@@ -143,7 +144,7 @@
             <div class="divide-y divide-ink/[0.06]" x-show="otherCosts.length > 0">
                 <template x-for="(cost, index) in otherCosts" :key="cost.key">
                     <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
-                        <div class="@4xl:col-span-4">
+                        <div class="@4xl:col-span-3">
                             <label class="block text-xs font-medium text-ink/50 mb-1.5">Kategori</label>
                             <div class="relative">
                                 <select :name="'other_costs['+index+'][expense_category_id]'" x-init="initExpenseCategorySelect($el, cost)">
@@ -156,6 +157,18 @@
                         </div>
 
                         <div class="@4xl:col-span-3">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Kas</label>
+                            <div class="relative">
+                                <select :name="'other_costs['+index+'][cash_id]'" x-init="initCashSelectForCost($el, cost)">
+                                    <option value="">— Pilih kas —</option>
+                                    <template x-for="c in cashes" :key="c.id">
+                                        <option :value="c.id" x-text="c.name + ' (Rp ' + formatRupiah(Math.round(parseFloat(c.current_balance))) + ')'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="@4xl:col-span-2">
                             <label class="block text-xs font-medium text-ink/50 mb-1.5">Jumlah</label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
@@ -167,7 +180,7 @@
                             </div>
                         </div>
 
-                        <div class="@4xl:col-span-4">
+                        <div class="@4xl:col-span-3">
                             <label class="block text-xs font-medium text-ink/50 mb-1.5">Keterangan</label>
                             <input type="text" :name="'other_costs['+index+'][description]'" x-model="cost.description" placeholder="Opsional"
                                    class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
@@ -206,11 +219,12 @@
 
 @push('scripts')
 <script>
-    function poCreateForm(suppliers, products, initialItems, expenseCategories, initialOtherCosts) {
+    function poCreateForm(suppliers, products, initialItems, expenseCategories, initialOtherCosts, cashes) {
         return {
             suppliers,
             products,
             expenseCategories,
+            cashes,
             items: initialItems.map(i => ({
                 key: Math.random().toString(36).slice(2),
                 product_id: i.product_id || '',
@@ -220,6 +234,7 @@
             otherCosts: initialOtherCosts.map(c => ({
                 key: Math.random().toString(36).slice(2),
                 expense_category_id: c.expense_category_id || '',
+                cash_id: c.cash_id || '',
                 amount: c.amount || '',
                 description: c.description || '',
             })),
@@ -234,7 +249,7 @@
             },
 
             addOtherCost() {
-                this.otherCosts.push({ key: Math.random().toString(36).slice(2), expense_category_id: '', amount: '', description: '' });
+                this.otherCosts.push({ key: Math.random().toString(36).slice(2), expense_category_id: '', cash_id: '', amount: '', description: '' });
             },
 
             removeOtherCost(key) {
@@ -309,6 +324,23 @@
 
                 if (cost.expense_category_id) {
                     this.$nextTick(() => $(el).val(String(cost.expense_category_id)).trigger('change.select2'));
+                }
+            },
+
+            // Kas sumber dana untuk biaya lainnya ini — mirror dari select kas di
+            // halaman Pengeluaran, supaya saldo kas yang dipilih benar-benar
+            // berkurang sebesar nominal biaya ini (lihat PurchaseOrderService::syncOtherCosts).
+            initCashSelectForCost(el, cost) {
+                $(el).select2({
+                    placeholder: '— Pilih kas —',
+                    width: '100%',
+                    dropdownParent: $('body'),
+                }).on('change', function () {
+                    cost.cash_id = $(this).val();
+                });
+
+                if (cost.cash_id) {
+                    this.$nextTick(() => $(el).val(String(cost.cash_id)).trigger('change.select2'));
                 }
             },
         };

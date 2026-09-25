@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Expense extends Model
 {
-    protected $fillable = ['expense_category_id', 'purchase_order_id', 'sales_order_id', 'expense_date', 'amount', 'description'];
+    protected $fillable = ['expense_category_id', 'purchase_order_id', 'sales_order_id', 'cash_id', 'expense_date', 'amount', 'description'];
 
     protected $casts = [
         'expense_date' => 'date',
@@ -16,6 +16,13 @@ class Expense extends Model
     public function category()
     {
         return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
+    }
+
+    // Kas yang saldonya berkurang akibat biaya ini. Null kalau expense ini
+    // dibuat sebelum fitur kas ada, atau kas sumbernya sudah dihapus.
+    public function cash()
+    {
+        return $this->belongsTo(Cash::class);
     }
 
     // Terisi kalau expense ini otomatis dibuat dari form "Biaya Lainnya" di PO

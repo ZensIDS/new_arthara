@@ -15,8 +15,9 @@ class UpdateExpenseRequest extends FormRequest
     {
         return [
             'expense_category_id' => ['required', 'exists:expense_categories,id'],
+            'cash_id'             => ['required', 'exists:cashes,id'],
             'expense_date'        => ['required', 'date'],
-            'amount'              => ['required', 'numeric', 'min:0'],
+            'amount'              => ['required', 'numeric', 'min:0.01'],
             'description'         => ['nullable', 'string', 'max:255'],
         ];
     }

@@ -4,7 +4,7 @@
 
 @section('content')
 <div
-    x-data="expensePage({{ Illuminate\Support\Js::from($expenseCategories) }})"
+    x-data="expensePage({{ Illuminate\Support\Js::from($expenseCategories) }}, {{ Illuminate\Support\Js::from($cashes) }})"
     x-cloak
 >
     <div class="flex items-center justify-between mb-6">
@@ -95,6 +95,17 @@
                         </div>
 
                         <div>
+                            <label class="block text-sm font-medium mb-1.5">Kas</label>
+                            <select x-ref="cashSelect" x-init="initCashSelect($el)">
+                                <option value="">— Pilih kas —</option>
+                                <template x-for="c in cashes" :key="c.id">
+                                    <option :value="c.id" x-text="c.name + ' (Rp ' + formatRupiah(Math.round(parseFloat(c.current_balance))) + ')'"></option>
+                                </template>
+                            </select>
+                            <p class="text-xs text-red-600 mt-1" x-text="errors.cash_id?.[0]"></p>
+                        </div>
+
+                        <div>
                             <label class="block text-sm font-medium mb-1.5">Jumlah</label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink/40">Rp</span>
@@ -132,17 +143,19 @@
 
 @push('scripts')
 <script>
-    function expensePage(initialCategories) {
+    function expensePage(initialCategories, initialCashes) {
         return {
             expenseCategories: initialCategories,
+            cashes: initialCashes,
             modalOpen: false,
             editing: null,
             saving: false,
             errors: {},
             flash: null,
             flashType: 'success',
-            form: { expense_category_id: '', expense_date: '', amount: '', description: '' },
+            form: { expense_category_id: '', cash_id: '', expense_date: '', amount: '', description: '' },
             _select2El: null,
+            _cashSelect2El: null,
 
             initCategorySelect(el) {
                 this._select2El = el;
@@ -164,18 +177,40 @@
                 });
             },
 
+            initCashSelect(el) {
+                this._cashSelect2El = el;
+                const self = this;
+                $(el).select2({
+                    placeholder: '— Pilih kas —',
+                    width: '100%',
+                    dropdownParent: $(el).closest('.relative'),
+                }).on('change', function () {
+                    self.form.cash_id = $(this).val();
+                });
+            },
+
+            syncCashSelect() {
+                this.$nextTick(() => {
+                    if (this._cashSelect2El) {
+                        $(this._cashSelect2El).val(this.form.cash_id || null).trigger('change.select2');
+                    }
+                });
+            },
+
             openCreate() {
                 this.editing = null;
-                this.form = { expense_category_id: '', expense_date: '', amount: '', description: '' };
+                this.form = { expense_category_id: '', cash_id: '', expense_date: '', amount: '', description: '' };
                 this.errors = {};
                 this.modalOpen = true;
                 this.syncCategorySelect();
+                this.syncCashSelect();
             },
 
             openEdit(expense) {
                 this.editing = expense;
                 this.form = {
                     expense_category_id: expense.expense_category_id,
+                    cash_id: expense.cash_id,
                     expense_date: expense.expense_date?.substring(0, 10),
                     amount: Math.round(parseFloat(expense.amount)) || '',
                     description: expense.description,
@@ -183,6 +218,7 @@
                 this.errors = {};
                 this.modalOpen = true;
                 this.syncCategorySelect();
+                this.syncCashSelect();
             },
 
             async submit() {
@@ -207,6 +243,17 @@
 
                 if (status === 422) {
                     this.errors = data.errors || {};
+
+                    // RuntimeException dari service (mis. saldo kas tidak cukup) balik
+                    // sebagai {message: ...} tanpa 'errors', jadi tidak ke-cover field
+                    // error di atas — tampilkan sebagai flash supaya tidak senyap.
+                    if (!data.errors && data.message) {
+                        // Modal (backdrop z-50) menutupi flash message yang ada di
+                        // belakangnya, jadi tutup dulu modalnya biar pesannya kebaca.
+                        this.modalOpen = false;
+                        this.flashType = 'error';
+                        this.flash = data.message;
+                    }
                     return;
                 }
 

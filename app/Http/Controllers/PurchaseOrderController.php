@@ -112,7 +112,9 @@ class PurchaseOrderController extends Controller
 
         $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
 
-        return view('purchase-orders.edit', compact('purchaseOrder', 'suppliers', 'products', 'expenseCategories'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('purchase-orders.edit', compact('purchaseOrder', 'suppliers', 'products', 'expenseCategories', 'cashes'));
     }
 
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder)

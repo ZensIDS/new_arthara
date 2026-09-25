@@ -111,7 +111,9 @@ class SalesOrderController extends Controller
         $sources = SaleSource::orderBy('name')->get(['id', 'name']);
         $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
 
-        return view('sales-orders.create', compact('customers', 'products', 'sources', 'expenseCategories'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('sales-orders.create', compact('customers', 'products', 'sources', 'expenseCategories', 'cashes'));
     }
 
     public function show(SalesOrder $salesOrder)
@@ -143,7 +145,9 @@ class SalesOrderController extends Controller
             $product->qty_on_hand += (int) ($existingQtyByProduct->get($product->id) ?? 0);
         });
 
-        return view('sales-orders.edit', compact('salesOrder', 'customers', 'products', 'sources', 'expenseCategories'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('sales-orders.edit', compact('salesOrder', 'customers', 'products', 'sources', 'expenseCategories', 'cashes'));
     }
 
     public function update(UpdateSalesOrderRequest $request, SalesOrder $salesOrder)

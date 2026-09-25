@@ -83,7 +83,13 @@ class PurchaseOrderService
      * dibersihkan, baru dibuat expense baru lewat ExpenseService::create() supaya
      * cash_flow baru ikut tercatat — konsisten dengan cara item PO di-replace.
      *
-     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...]
+     * @param array $otherCosts [['expense_category_id', 'cash_id', 'amount', 'description'], ...] —
+     *                          'cash_id' wajib per baris (divalidasi di StorePurchaseOrderRequest /
+     *                          UpdatePurchaseOrderRequest) supaya tiap biaya lainnya benar-benar
+     *                          memotong saldo kas yang dipilih, sama seperti input manual dari
+     *                          halaman Pengeluaran.
+     *
+     * @throws \RuntimeException kalau saldo salah satu kas yang dipilih tidak cukup
      */
     protected function syncOtherCosts(PurchaseOrder $po, array $otherCosts): void
     {
@@ -95,6 +101,7 @@ class PurchaseOrderService
             $this->expenseService->create([
                 'expense_category_id' => $cost['expense_category_id'],
                 'purchase_order_id'   => $po->id,
+                'cash_id'             => $cost['cash_id'] ?? null,
                 'expense_date'        => $po->po_date,
                 'amount'              => $cost['amount'],
                 'description'         => $cost['description'] ?? "Biaya tambahan PO #{$po->po_number}",

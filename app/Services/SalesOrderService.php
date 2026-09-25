@@ -165,7 +165,13 @@ class SalesOrderService
      * dibersihkan, baru dibuat expense baru lewat ExpenseService::create() supaya
      * cash_flow baru ikut tercatat — konsisten dengan cara item PO/SO di-replace.
      *
-     * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...]
+     * @param array $otherCosts [['expense_category_id', 'cash_id', 'amount', 'description'], ...] —
+     *                          'cash_id' wajib per baris (divalidasi di StoreSalesOrderRequest /
+     *                          UpdateSalesOrderRequest) supaya tiap biaya lainnya benar-benar
+     *                          memotong saldo kas yang dipilih, sama seperti input manual dari
+     *                          halaman Pengeluaran.
+     *
+     * @throws \RuntimeException kalau saldo salah satu kas yang dipilih tidak cukup
      */
     protected function syncOtherCosts(SalesOrder $so, array $otherCosts): void
     {
@@ -177,6 +183,7 @@ class SalesOrderService
             $this->expenseService->create([
                 'expense_category_id' => $cost['expense_category_id'],
                 'sales_order_id'      => $so->id,
+                'cash_id'             => $cost['cash_id'] ?? null,
                 'expense_date'        => $so->so_date,
                 'amount'              => $cost['amount'],
                 'description'         => $cost['description'] ?? "Biaya tambahan SO #{$so->so_number}",

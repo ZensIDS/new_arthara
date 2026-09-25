@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreExpenseRequest;
 use App\Http\Requests\UpdateExpenseRequest;
+use App\Models\Cash;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Services\ExpenseService;
@@ -20,7 +21,7 @@ class ExpenseController extends Controller
         $search    = trim((string) $request->input('search', ''));
 
         $expenses = Expense::query()
-            ->with(['category:id,name', 'purchaseOrder:id,po_number', 'salesOrder:id,so_number']) // hanya kolom yang dipakai di tabel
+            ->with(['category:id,name', 'purchaseOrder:id,po_number', 'salesOrder:id,so_number', 'cash:id,name']) // hanya kolom yang dipakai di tabel
             ->when($startDate, fn($q) => $q->whereDate('expense_date', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('expense_date', '<=', $endDate))
             ->when($search !== '', function ($q) use ($search) {
@@ -37,17 +38,22 @@ class ExpenseController extends Controller
             ->withQueryString();
 
         $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
+        $cashes            = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
 
         if ($request->ajax()) {
             return view('expenses._table', compact('expenses'));
         }
 
-        return view('expenses.index', compact('expenses', 'expenseCategories', 'startDate', 'endDate', 'search'));
+        return view('expenses.index', compact('expenses', 'expenseCategories', 'cashes', 'startDate', 'endDate', 'search'));
     }
 
     public function store(StoreExpenseRequest $request)
     {
-        $expense = $this->service->create($request->validated());
+        try {
+            $expense = $this->service->create($request->validated());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Biaya berhasil dicatat.',
@@ -69,7 +75,11 @@ class ExpenseController extends Controller
             ], 422);
         }
 
-        $this->service->update($expense, $request->validated());
+        try {
+            $this->service->update($expense, $request->validated());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Biaya berhasil diperbarui.',
