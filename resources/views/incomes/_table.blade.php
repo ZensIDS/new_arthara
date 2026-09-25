@@ -19,6 +19,7 @@
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Tanggal</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Kategori</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Keterangan</th>
+                        <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide">Kas</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Jumlah</th>
                         <th class="px-5 py-3.5 font-semibold text-xs uppercase tracking-wide text-right">Aksi</th>
                     </tr>
@@ -33,6 +34,7 @@
                                 </span>
                             </td>
                             <td class="px-5 py-3.5 text-ink/50">{{ $income->description ?? '—' }}</td>
+                            <td class="px-5 py-3.5 text-ink/60">{{ $income->cash->name ?? '—' }}</td>
                             <td class="px-5 py-3.5 text-right tnum font-semibold text-emerald-700/90">+Rp{{ number_format($income->amount, 0, ',', '.') }}</td>
                             <td class="px-5 py-3.5 text-right">
                                 @if (auth()->user()->isSuperadmin())
@@ -49,7 +51,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-5 py-10 text-center text-ink/40">
+                            <td colspan="6" class="px-5 py-10 text-center text-ink/40">
                                 {{ request('search') ? 'Tidak ada catatan pemasukan yang cocok dengan pencarian.' : 'Belum ada catatan pemasukan.' }}
                             </td>
                         </tr>

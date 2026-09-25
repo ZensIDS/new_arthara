@@ -4,7 +4,7 @@
 
 @section('content')
 <div
-    x-data="incomePage({{ Illuminate\Support\Js::from($incomeCategories) }})"
+    x-data="incomePage({{ Illuminate\Support\Js::from($incomeCategories) }}, {{ Illuminate\Support\Js::from($cashes) }})"
     x-cloak
 >
     <div class="flex items-center justify-between mb-6">
@@ -26,7 +26,7 @@
 
     <p class="text-xs text-ink/40 -mt-4 mb-6">
         Untuk pemasukan di luar penjualan — misalnya suntikan modal, pinjaman, atau pendapatan lain-lain.
-        Setiap catatan di sini otomatis tercatat sebagai kas masuk di laporan Arus Kas &amp; Dashboard.
+        Setiap catatan di sini otomatis menambah saldo kas yang dipilih dan tercatat sebagai kas masuk di laporan Arus Kas &amp; Dashboard.
     </p>
 
     <div x-show="flash" x-cloak x-transition
@@ -102,6 +102,17 @@
                         </div>
 
                         <div>
+                            <label class="block text-sm font-medium mb-1.5">Kas <span class="text-red-600">*</span></label>
+                            <select x-ref="cashSelect" x-init="initCashSelect($el)">
+                                <option value="">— Pilih kas —</option>
+                                <template x-for="c in cashes" :key="c.id">
+                                    <option :value="c.id" x-text="c.name + ' (Rp ' + formatRupiah(Math.round(parseFloat(c.current_balance))) + ')'"></option>
+                                </template>
+                            </select>
+                            <p class="text-xs text-red-600 mt-1" x-text="errors.cash_id?.[0]"></p>
+                        </div>
+
+                        <div>
                             <label class="block text-sm font-medium mb-1.5">Jumlah <span class="text-red-600">*</span></label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink/40">Rp</span>
@@ -139,17 +150,19 @@
 
 @push('scripts')
 <script>
-    function incomePage(initialCategories) {
+    function incomePage(initialCategories, initialCashes) {
         return {
             incomeCategories: initialCategories,
+            cashes: initialCashes,
             modalOpen: false,
             editing: null,
             saving: false,
             errors: {},
             flash: null,
             flashType: 'success',
-            form: { income_category_id: '', income_date: '', amount: '', description: '' },
+            form: { income_category_id: '', cash_id: '', income_date: '', amount: '', description: '' },
             _select2El: null,
+            _cashSelect2El: null,
 
             initCategorySelect(el) {
                 this._select2El = el;
@@ -171,18 +184,40 @@
                 });
             },
 
+            initCashSelect(el) {
+                this._cashSelect2El = el;
+                const self = this;
+                $(el).select2({
+                    placeholder: '— Pilih kas —',
+                    width: '100%',
+                    dropdownParent: $(el).closest('.relative'),
+                }).on('change', function () {
+                    self.form.cash_id = $(this).val();
+                });
+            },
+
+            syncCashSelect() {
+                this.$nextTick(() => {
+                    if (this._cashSelect2El) {
+                        $(this._cashSelect2El).val(this.form.cash_id || null).trigger('change.select2');
+                    }
+                });
+            },
+
             openCreate() {
                 this.editing = null;
-                this.form = { income_category_id: '', income_date: '', amount: '', description: '' };
+                this.form = { income_category_id: '', cash_id: '', income_date: '', amount: '', description: '' };
                 this.errors = {};
                 this.modalOpen = true;
                 this.syncCategorySelect();
+                this.syncCashSelect();
             },
 
             openEdit(income) {
                 this.editing = income;
                 this.form = {
                     income_category_id: income.income_category_id,
+                    cash_id: income.cash_id,
                     income_date: income.income_date?.substring(0, 10),
                     amount: Math.round(parseFloat(income.amount)) || '',
                     description: income.description,
@@ -190,6 +225,7 @@
                 this.errors = {};
                 this.modalOpen = true;
                 this.syncCategorySelect();
+                this.syncCashSelect();
             },
 
             async submit() {
@@ -214,6 +250,18 @@
 
                 if (status === 422) {
                     this.errors = data.errors || {};
+
+                    // RuntimeException dari service (mis. saldo kas tidak cukup saat
+                    // pindah kas) balik sebagai {message: ...} tanpa 'errors', jadi
+                    // tidak ke-cover field error di atas — tampilkan sebagai flash
+                    // supaya tidak senyap.
+                    if (!data.errors && data.message) {
+                        // Modal (backdrop z-50) menutupi flash message yang ada di
+                        // belakangnya, jadi tutup dulu modalnya biar pesannya kebaca.
+                        this.modalOpen = false;
+                        this.flashType = 'error';
+                        this.flash = data.message;
+                    }
                     return;
                 }
 

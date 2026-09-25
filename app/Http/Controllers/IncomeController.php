@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreIncomeRequest;
 use App\Http\Requests\UpdateIncomeRequest;
+use App\Models\Cash;
 use App\Models\Income;
 use App\Models\IncomeCategory;
 use App\Services\IncomeService;
@@ -20,7 +21,7 @@ class IncomeController extends Controller
         $search    = trim((string) $request->input('search', ''));
 
         $incomes = Income::query()
-            ->with('category:id,name') // hanya kolom yang dipakai di tabel
+            ->with(['category:id,name', 'cash:id,name']) // hanya kolom yang dipakai di tabel
             ->when($startDate, fn($q) => $q->whereDate('income_date', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('income_date', '<=', $endDate))
             ->when($search !== '', function ($q) use ($search) {
@@ -37,17 +38,22 @@ class IncomeController extends Controller
             ->withQueryString();
 
         $incomeCategories = IncomeCategory::orderBy('name')->get(['id', 'name', 'affects_profit_loss']);
+        $cashes           = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
 
         if ($request->ajax()) {
             return view('incomes._table', compact('incomes'));
         }
 
-        return view('incomes.index', compact('incomes', 'incomeCategories', 'startDate', 'endDate', 'search'));
+        return view('incomes.index', compact('incomes', 'incomeCategories', 'cashes', 'startDate', 'endDate', 'search'));
     }
 
     public function store(StoreIncomeRequest $request)
     {
-        $income = $this->service->create($request->validated());
+        try {
+            $income = $this->service->create($request->validated());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Pemasukan berhasil dicatat.',
@@ -57,7 +63,11 @@ class IncomeController extends Controller
 
     public function update(UpdateIncomeRequest $request, Income $income)
     {
-        $this->service->update($income, $request->validated());
+        try {
+            $this->service->update($income, $request->validated());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Pemasukan berhasil diperbarui.',
@@ -67,7 +77,11 @@ class IncomeController extends Controller
 
     public function destroy(Income $income)
     {
-        $this->service->delete($income);
+        try {
+            $this->service->delete($income);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'message' => 'Pemasukan berhasil dihapus.',

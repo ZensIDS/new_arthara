@@ -15,8 +15,9 @@ class UpdateIncomeRequest extends FormRequest
     {
         return [
             'income_category_id' => ['required', 'exists:income_categories,id'],
+            'cash_id'             => ['required', 'exists:cashes,id'],
             'income_date'         => ['required', 'date'],
-            'amount'              => ['required', 'numeric', 'min:0'],
+            'amount'              => ['required', 'numeric', 'min:0.01'],
             'description'         => ['nullable', 'string', 'max:255'],
         ];
     }
