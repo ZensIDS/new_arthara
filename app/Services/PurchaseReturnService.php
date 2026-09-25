@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\CashFlow;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
@@ -14,6 +15,7 @@ class PurchaseReturnService
     public function __construct(
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
+        protected CashService $cashService,
         protected DocumentNumberService $numberService,
     ) {}
 
@@ -29,12 +31,16 @@ class PurchaseReturnService
      *
      * @param array $data ['return_date', 'note']
      * @param array $items [['purchase_order_item_id', 'qty'], ...]
+     * @param Cash|null $cash kas tujuan refund kalau retur ini bikin PO overpaid.
+     *                        Boleh null selama tidak terjadi overpaid; kalau ternyata
+     *                        overpaid dan kas tidak diisi, akan dilempar RuntimeException.
      *
-     * @throws RuntimeException kalau item bukan milik PO ini, atau qty retur melebihi sisa stok
+     * @throws RuntimeException kalau item bukan milik PO ini, qty retur melebihi sisa stok,
+     *                           atau terjadi overpaid tapi kas refund tidak diisi
      */
-    public function create(PurchaseOrder $po, array $data, array $items): PurchaseReturn
+    public function create(PurchaseOrder $po, array $data, array $items, ?Cash $cash = null): PurchaseReturn
     {
-        return DB::transaction(function () use ($po, $data, $items) {
+        return DB::transaction(function () use ($po, $data, $items, $cash) {
             $po = PurchaseOrder::where('id', $po->id)->lockForUpdate()->first();
 
             if (empty($items)) {
@@ -111,11 +117,21 @@ class PurchaseReturnService
             // uang yang benar-benar sudah dibayarkan).
             $overpaid = (float) $po->paid_amount - (float) $po->total_amount;
             if ($overpaid > 0) {
+                if (! $cash) {
+                    throw new RuntimeException(
+                        "Retur ini membuat PO #{$po->po_number} overpaid sebesar Rp ".number_format($overpaid, 0, ',', '.').
+                        ' — pilih kas tujuan refund untuk melanjutkan.'
+                    );
+                }
+
+                $this->cashService->increase($cash, $overpaid);
+
                 $this->cashFlowService->recordIn(
                     $data['return_date'],
                     $overpaid,
                     $return,
-                    "Refund retur {$return->return_number} — PO #{$po->po_number} ke {$po->supplier->name}"
+                    "Refund retur {$return->return_number} — PO #{$po->po_number} ke {$po->supplier->name}",
+                    $cash
                 );
             }
 
@@ -148,9 +164,20 @@ class PurchaseReturnService
             $po->payment_status = $this->resolvePaymentStatus($po->total_amount, $po->paid_amount);
             $po->save();
 
-            // Hapus entry kas masuk (refund) yang tercatat waktu retur ini dibuat
-            // (kalau dulu PO sempat overpaid setelah retur ini). Kalau tidak ada
-            // entry (retur dulu tidak memicu refund), ini no-op.
+            // Balikkan saldo kas yang sempat bertambah dari refund retur ini
+            // (kalau dulu PO sempat overpaid setelah retur ini), lalu hapus
+            // entry kas masuknya. Kalau tidak ada entry (retur dulu tidak
+            // memicu refund), loop ini no-op.
+            $refundFlows = CashFlow::where('source_type', PurchaseReturn::class)
+                ->where('source_id', $return->id)
+                ->get();
+
+            foreach ($refundFlows as $flow) {
+                if ($flow->cash_id) {
+                    $this->cashService->decrease(Cash::findOrFail($flow->cash_id), (float) $flow->amount);
+                }
+            }
+
             CashFlow::where('source_type', PurchaseReturn::class)
                 ->where('source_id', $return->id)
                 ->delete();

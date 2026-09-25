@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PurchasePayment extends Model
 {
-    protected $fillable = ['purchase_order_id', 'payment_date', 'amount', 'method', 'note'];
+    protected $fillable = ['purchase_order_id', 'cash_id', 'payment_date', 'amount', 'method', 'note'];
 
     protected $casts = [
         'payment_date' => 'date',
@@ -16,5 +16,10 @@ class PurchasePayment extends Model
     public function purchaseOrder()
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function cash()
+    {
+        return $this->belongsTo(Cash::class);
     }
 }

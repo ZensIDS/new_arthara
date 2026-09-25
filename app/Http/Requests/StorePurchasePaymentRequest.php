@@ -17,6 +17,7 @@ class StorePurchasePaymentRequest extends FormRequest
         return [
             'payment_date' => ['required', 'date'],
             'amount'       => ['required', 'numeric', 'min:0.01'],
+            'cash_id'      => ['required', 'exists:cashes,id'],
             'method'       => ['required', 'in:cash,transfer,other'],
             'note'         => ['nullable', 'string', 'max:1000'],
         ];

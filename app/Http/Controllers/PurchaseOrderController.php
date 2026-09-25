@@ -6,6 +6,7 @@ use App\Http\Requests\StorePurchaseOrderRequest;
 use App\Http\Requests\StorePurchasePaymentRequest;
 use App\Http\Requests\UpdatePurchaseOrderRequest;
 use App\Http\Requests\UpdatePurchasePaymentRequest;
+use App\Models\Cash;
 use App\Models\ExpenseCategory;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
@@ -81,14 +82,18 @@ class PurchaseOrderController extends Controller
 
         $expenseCategories = ExpenseCategory::orderBy('name')->get(['id', 'name']);
 
-        return view('purchase-orders.create', compact('suppliers', 'products', 'expenseCategories'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('purchase-orders.create', compact('suppliers', 'products', 'expenseCategories', 'cashes'));
     }
 
     public function show(PurchaseOrder $purchaseOrder)
     {
         $purchaseOrder->load(['supplier', 'items.product', 'items.stockBatch', 'items.returnItems', 'payments', 'returns.items.product', 'otherCosts.category']);
 
-        return view('purchase-orders.show', compact('purchaseOrder'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('purchase-orders.show', compact('purchaseOrder', 'cashes'));
     }
 
     public function edit(PurchaseOrder $purchaseOrder)
@@ -166,6 +171,7 @@ class PurchaseOrderController extends Controller
                 initialPayment: $validated['initial_payment'] ?? null,
                 paymentMethod: $validated['payment_method'] ?? 'cash',
                 otherCosts: $validated['other_costs'] ?? [],
+                cash: isset($validated['cash_id']) ? Cash::find($validated['cash_id']) : null,
             );
         } catch (\RuntimeException $e) {
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
@@ -186,6 +192,7 @@ class PurchaseOrderController extends Controller
                 po: $purchaseOrder,
                 date: $validated['payment_date'],
                 amount: $validated['amount'],
+                cash: Cash::findOrFail($validated['cash_id']),
                 method: $validated['method'],
                 note: $validated['note'] ?? null,
             );

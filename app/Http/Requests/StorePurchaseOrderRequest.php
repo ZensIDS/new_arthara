@@ -25,6 +25,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'items.*.buy_price'        => ['required', 'numeric', 'min:0'],
 
             'initial_payment'          => ['nullable', 'numeric', 'min:0'],
+            'cash_id'                  => ['nullable', 'exists:cashes,id'],
             'payment_method'           => ['nullable', 'in:cash,transfer,other'],
 
             'other_costs'                             => ['nullable', 'array'],
@@ -44,6 +45,11 @@ class StorePurchaseOrderRequest extends FormRequest
 
             if ($productIds->count() !== $productIds->unique()->count()) {
                 $validator->errors()->add('items', 'Satu produk tidak boleh dipilih di lebih dari 1 baris item.');
+            }
+
+            // Kas wajib diisi kalau ada pembayaran awal (initial_payment > 0).
+            if ((float) $this->input('initial_payment', 0) > 0 && ! $this->filled('cash_id')) {
+                $validator->errors()->add('cash_id', 'Pilih kas untuk pembayaran awal.');
             }
         });
     }

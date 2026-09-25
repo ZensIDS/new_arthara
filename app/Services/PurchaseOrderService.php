@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\PurchaseOrder;
 use App\Models\PurchasePayment;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,7 @@ class PurchaseOrderService
     public function __construct(
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
+        protected CashService $cashService,
         protected DocumentNumberService $numberService,
         protected ExpenseService $expenseService,
     ) {}
@@ -28,10 +30,12 @@ class PurchaseOrderService
      *                          tambahan (packing, ongkir, dll), opsional & boleh lebih dari satu.
      *                          Tiap baris otomatis jadi record Expense terpisah yang terhubung ke
      *                          PO ini, TAPI tidak menambah total_amount/paid_amount PO.
+     * @param Cash|null $cash kas yang dipakai untuk pembayaran awal — WAJIB diisi kalau
+     *                        $initialPayment diisi (divalidasi di StorePurchaseOrderRequest).
      */
-    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): PurchaseOrder
+    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = [], ?Cash $cash = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod, $otherCosts) {
+        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod, $otherCosts, $cash) {
             $totalAmount = 0;
             foreach ($items as $item) {
                 $totalAmount += $item['qty'] * $item['buy_price'];
@@ -61,7 +65,11 @@ class PurchaseOrderService
             $this->syncOtherCosts($po, $otherCosts);
 
             if ($initialPayment && $initialPayment > 0) {
-                $this->addPayment($po, $po->po_date, $initialPayment, $paymentMethod, 'Pembayaran awal saat PO dibuat');
+                if (! $cash) {
+                    throw new \RuntimeException('Kas untuk pembayaran awal wajib dipilih.');
+                }
+
+                $this->addPayment($po, $po->po_date, $initialPayment, $cash, $paymentMethod, 'Pembayaran awal saat PO dibuat');
             }
 
             return $po->fresh(['items', 'payments', 'otherCosts']);
@@ -96,11 +104,14 @@ class PurchaseOrderService
 
     /**
      * Tambah pembayaran termin ke PO yang sudah ada. Menyinkronkan
-     * paid_amount & payment_status, dan mencatat kas keluar.
+     * paid_amount & payment_status, mengurangi saldo kas yang dipilih,
+     * dan mencatat kas keluar di ledger.
+     *
+     * @throws \RuntimeException kalau nominal melebihi sisa hutang, atau saldo kas tidak cukup
      */
-    public function addPayment(PurchaseOrder $po, string $date, float $amount, string $method = 'cash', ?string $note = null): PurchasePayment
+    public function addPayment(PurchaseOrder $po, string $date, float $amount, Cash $cash, string $method = 'cash', ?string $note = null): PurchasePayment
     {
-        return DB::transaction(function () use ($po, $date, $amount, $method, $note) {
+        return DB::transaction(function () use ($po, $date, $amount, $cash, $method, $note) {
             $remaining = $po->total_amount - $po->paid_amount;
 
             if ($amount > $remaining) {
@@ -109,7 +120,12 @@ class PurchaseOrderService
                 );
             }
 
+            // Dicek & dikurangi duluan supaya kalau saldo kas tidak cukup,
+            // seluruh transaksi (termasuk update paid_amount) ikut batal.
+            $this->cashService->decrease($cash, $amount);
+
             $payment = $po->payments()->create([
+                'cash_id'      => $cash->id,
                 'payment_date' => $date,
                 'amount'       => $amount,
                 'method'       => $method,
@@ -124,7 +140,8 @@ class PurchaseOrderService
                 $date,
                 $amount,
                 $payment,
-                "Pembayaran PO #{$po->po_number} ke {$po->supplier->name}"
+                "Pembayaran PO #{$po->po_number} ke {$po->supplier->name}",
+                $cash
             );
 
             return $payment;
@@ -136,9 +153,10 @@ class PurchaseOrderService
      * paid_amount & payment_status PO dihitung ulang otomatis, dan entry cash_flow
      * terkait ikut disinkronkan — semua dalam satu transaksi supaya konsisten.
      *
-     * @param array $data ['payment_date', 'amount', 'method', 'note']
+     * @param array $data ['payment_date', 'amount', 'method', 'note', 'cash_id']
      *
-     * @throws \RuntimeException kalau nominal baru bikin total pembayaran melebihi total PO
+     * @throws \RuntimeException kalau nominal baru bikin total pembayaran melebihi total PO,
+     *                            atau saldo kas (baru/lama) tidak cukup untuk penyesuaian
      */
     public function updatePayment(PurchasePayment $payment, array $data): PurchasePayment
     {
@@ -156,7 +174,19 @@ class PurchaseOrderService
                 );
             }
 
+            $oldCash = $payment->cash_id ? Cash::find($payment->cash_id) : null;
+            $newCash = Cash::findOrFail($data['cash_id']);
+
+            // Balikkan dulu efek pembayaran lama ke kas lamanya (kalau ada),
+            // baru kurangi kas baru sebesar nominal baru. Dilakukan terpisah
+            // (bukan cuma selisih) supaya tetap benar meskipun kasnya berubah.
+            if ($oldCash) {
+                $this->cashService->increase($oldCash, $oldAmount);
+            }
+            $this->cashService->decrease($newCash, $newAmount);
+
             $payment->update([
+                'cash_id'      => $newCash->id,
                 'payment_date' => $data['payment_date'],
                 'amount'       => $newAmount,
                 'method'       => $data['method'],
@@ -167,7 +197,7 @@ class PurchaseOrderService
             $po->payment_status = $this->resolvePaymentStatus($po->total_amount, $newPaidTotal);
             $po->save();
 
-            $this->cashFlowService->updateForSource($payment, $data['payment_date'], $newAmount);
+            $this->cashFlowService->updateForSource($payment, $data['payment_date'], $newAmount, $newCash);
 
             return $payment->fresh();
         });
@@ -175,12 +205,17 @@ class PurchaseOrderService
 
     /**
      * Hapus pembayaran yang sudah tercatat. paid_amount & payment_status PO
-     * dihitung ulang, dan entry cash_flow terkait ikut dihapus.
+     * dihitung ulang, saldo kas yang dipakai dikembalikan, dan entry
+     * cash_flow terkait ikut dihapus.
      */
     public function deletePayment(PurchasePayment $payment): void
     {
         DB::transaction(function () use ($payment) {
             $po = $payment->purchaseOrder()->lockForUpdate()->first();
+
+            if ($payment->cash_id) {
+                $this->cashService->increase(Cash::findOrFail($payment->cash_id), (float) $payment->amount);
+            }
 
             $this->cashFlowService->deleteForSource($payment);
 
@@ -271,6 +306,7 @@ class PurchaseOrderService
      *
      * Satu-satunya hal yang tetap memblokir hapus adalah kalau ada barang
      * dari PO ini yang sudah terlanjur terjual (batch stok sudah kepakai).
+     * Saldo kas yang sempat dipakai untuk tiap pembayaran juga dikembalikan.
      *
      * @throws \RuntimeException kalau ada batch yang sudah kepakai
      */
@@ -286,6 +322,10 @@ class PurchaseOrderService
             }
 
             foreach ($po->payments as $payment) {
+                if ($payment->cash_id) {
+                    $this->cashService->increase(Cash::findOrFail($payment->cash_id), (float) $payment->amount);
+                }
+
                 $this->cashFlowService->deleteForSource($payment);
             }
 

@@ -18,6 +18,12 @@ class StorePurchaseReturnRequest extends FormRequest
             'return_date' => ['required', 'date'],
             'note'        => ['nullable', 'string', 'max:1000'],
 
+            // Kas tujuan refund — hanya benar-benar dipakai kalau retur ini
+            // membuat PO overpaid (lihat PurchaseReturnService::create). Kalau
+            // ternyata overpaid tapi ini kosong, service akan menolak dengan
+            // RuntimeException yang jelas, bukan gagal diam-diam.
+            'cash_id' => ['nullable', 'exists:cashes,id'],
+
             'items'                              => ['required', 'array', 'min:1'],
             'items.*.purchase_order_item_id'     => ['required', 'exists:purchase_order_items,id'],
             'items.*.qty'                         => ['required', 'integer', 'min:1'],

@@ -2,29 +2,32 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\CashFlow;
 use Illuminate\Database\Eloquent\Model;
 
 class CashFlowService
 {
-    public function recordIn(string $date, float $amount, Model $source, string $description): CashFlow
+    public function recordIn(string $date, float $amount, Model $source, string $description, ?Cash $cash = null): CashFlow
     {
         return CashFlow::create([
             'transaction_date' => $date,
             'direction'        => 'in',
             'amount'           => $amount,
+            'cash_id'          => $cash?->id,
             'source_type'      => get_class($source),
             'source_id'        => $source->getKey(),
             'description'      => $description,
         ]);
     }
 
-    public function recordOut(string $date, float $amount, Model $source, string $description): CashFlow
+    public function recordOut(string $date, float $amount, Model $source, string $description, ?Cash $cash = null): CashFlow
     {
         return CashFlow::create([
             'transaction_date' => $date,
             'direction'        => 'out',
             'amount'           => $amount,
+            'cash_id'          => $cash?->id,
             'source_type'      => get_class($source),
             'source_id'        => $source->getKey(),
             'description'      => $description,
@@ -36,13 +39,14 @@ class CashFlowService
      * yang datanya baru saja diedit — dipakai saat payment di-edit supaya ledger arus kas
      * ikut berubah, bukan dobel/nyisa entry lama.
      */
-    public function updateForSource(Model $source, string $date, float $amount): void
+    public function updateForSource(Model $source, string $date, float $amount, ?Cash $cash = null): void
     {
         CashFlow::where('source_type', get_class($source))
             ->where('source_id', $source->getKey())
             ->update([
                 'transaction_date' => $date,
                 'amount'           => $amount,
+                'cash_id'          => $cash?->id,
             ]);
     }
 

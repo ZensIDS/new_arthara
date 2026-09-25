@@ -10,6 +10,7 @@ class CashFlow extends Model
         'transaction_date',
         'direction',
         'amount',
+        'cash_id',
         'source_type',
         'source_id',
         'description',
@@ -23,5 +24,10 @@ class CashFlow extends Model
     public function source()
     {
         return $this->morphTo();
+    }
+
+    public function cash()
+    {
+        return $this->belongsTo(Cash::class);
     }
 }

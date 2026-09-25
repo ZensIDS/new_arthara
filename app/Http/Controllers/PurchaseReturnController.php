@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StorePurchaseReturnRequest;
+use App\Models\Cash;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseReturn;
 use App\Services\PurchaseReturnService;
@@ -23,6 +24,7 @@ class PurchaseReturnController extends Controller
                     'note'        => $validated['note'] ?? null,
                 ],
                 items: $validated['items'],
+                cash: isset($validated['cash_id']) ? Cash::find($validated['cash_id']) : null,
             );
         } catch (\RuntimeException $e) {
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
