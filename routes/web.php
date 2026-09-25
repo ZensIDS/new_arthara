@@ -120,6 +120,8 @@ Route::middleware(['auth', 'role:superadmin'])->group(function () {
         ->name('purchase-orders.payments.store');
     Route::put('purchase-orders/{purchaseOrder}/payments/{payment}', [PurchaseOrderController::class, 'updatePayment'])
         ->name('purchase-orders.payments.update');
+    Route::delete('purchase-orders/{purchaseOrder}/payments/{payment}', [PurchaseOrderController::class, 'destroyPayment'])
+        ->name('purchase-orders.payments.destroy');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseReturnController::class, 'store'])
         ->name('purchase-orders.returns.store');
     Route::delete('purchase-orders/{purchaseOrder}/returns/{return}', [PurchaseReturnController::class, 'destroy'])
@@ -135,6 +137,8 @@ Route::middleware(['auth', 'role:superadmin'])->group(function () {
         ->name('sales-orders.payments.store');
     Route::put('sales-orders/{salesOrder}/payments/{payment}', [SalesOrderController::class, 'updatePayment'])
         ->name('sales-orders.payments.update');
+    Route::delete('sales-orders/{salesOrder}/payments/{payment}', [SalesOrderController::class, 'destroyPayment'])
+        ->name('sales-orders.payments.destroy');
     Route::post('sales-orders/{salesOrder}/returns', [SalesReturnController::class, 'store'])
         ->name('sales-orders.returns.store');
     Route::delete('sales-orders/{salesOrder}/returns/{return}', [SalesReturnController::class, 'destroy'])

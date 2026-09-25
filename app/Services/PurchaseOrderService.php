@@ -174,6 +174,25 @@ class PurchaseOrderService
     }
 
     /**
+     * Hapus pembayaran yang sudah tercatat. paid_amount & payment_status PO
+     * dihitung ulang, dan entry cash_flow terkait ikut dihapus.
+     */
+    public function deletePayment(PurchasePayment $payment): void
+    {
+        DB::transaction(function () use ($payment) {
+            $po = $payment->purchaseOrder()->lockForUpdate()->first();
+
+            $this->cashFlowService->deleteForSource($payment);
+
+            $po->paid_amount = (float) $po->paid_amount - (float) $payment->amount;
+            $po->payment_status = $this->resolvePaymentStatus($po->total_amount, $po->paid_amount);
+            $po->save();
+
+            $payment->delete();
+        });
+    }
+
+    /**
      * Update PO yang sudah ada: ganti data utama + replace semua item lama
      * dengan item baru (batch stok lama dihapus, batch baru dibuat).
      * Tetap boleh dipanggil meskipun PO sudah ada pembayaran (partial/lunas) —

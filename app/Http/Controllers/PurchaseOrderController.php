@@ -214,4 +214,21 @@ class PurchaseOrderController extends Controller
 
         return back()->with('success', 'Pembayaran berhasil diperbarui.');
     }
+
+    /**
+     * Hapus pembayaran yang sudah tercatat. paid_amount, payment_status PO,
+     * dan entry cash_flow terkait ikut dibersihkan di service.
+     */
+    public function destroyPayment(PurchaseOrder $purchaseOrder, PurchasePayment $payment)
+    {
+        abort_unless($payment->purchase_order_id === $purchaseOrder->id, 404);
+
+        try {
+            $this->service->deletePayment($payment);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Pembayaran berhasil dihapus.');
+    }
 }

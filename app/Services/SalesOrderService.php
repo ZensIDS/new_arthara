@@ -22,20 +22,21 @@ class SalesOrderService
      *
      * @param array $data ['customer_id', 'so_date', 'note', 'source_id', 'estimated_packing_cost'] — 'so_number' opsional,
      *                     kalau tidak diisi akan digenerate otomatis: SO/{Bulan Romawi}/{Tahun}/{Urut}
-     * @param array $items [['product_id', 'qty', 'sell_price'], ...]
+     * @param array $items [['product_id', 'qty'], ...] — TANPA sell_price per baris. Harga jual
+     *                      diinput 1 angka total lewat $totalAmount (lihat parameter di bawah),
+     *                      lalu dibagi ke tiap baris lewat distributeSellPrice().
+     * @param float $totalAmount Total harga jual seluruh transaksi (1 angka, bukan per unit/baris) —
+     *                            dipakai apa adanya sebagai total_amount SO, TIDAK dihitung dari
+     *                            qty x harga per item, karena harga jual marketplace biasanya sudah
+     *                            berupa angka total setelah potongan pajak/komisi.
      * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — biaya
      *                          tambahan (packing, ongkir, dll), opsional & boleh lebih dari satu.
      *                          Tiap baris otomatis jadi record Expense terpisah yang terhubung ke
      *                          SO ini, TAPI tidak menambah total_amount/paid_amount SO.
      */
-    public function create(array $data, array $items, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): SalesOrder
+    public function create(array $data, array $items, float $totalAmount, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): SalesOrder
     {
-        return DB::transaction(function () use ($data, $items, $initialPayment, $paymentMethod, $otherCosts) {
-            $totalAmount = 0;
-            foreach ($items as $item) {
-                $totalAmount += $item['qty'] * $item['sell_price'];
-            }
-
+        return DB::transaction(function () use ($data, $items, $totalAmount, $initialPayment, $paymentMethod, $otherCosts) {
             $data['so_number'] ??= $this->numberService->generate('SO', SalesOrder::class, 'so_number');
 
             $so = SalesOrder::create([
@@ -46,16 +47,20 @@ class SalesOrderService
                 'payment_status' => 'unpaid',
             ]);
 
-            $totalHpp = 0;
+            $saleItems = [];
+            $totalHpp  = 0;
 
+            // Tahap 1: buat baris item & alokasikan stok FIFO dulu, supaya HPP riil
+            // tiap baris diketahui. sell_price/subtotal per baris sengaja diisi 0
+            // dulu — baru dihitung di tahap 2 setelah semua HPP kekumpul.
             foreach ($items as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
 
                 $saleItem = $so->items()->create([
                     'product_id'   => $product->id,
                     'qty'          => $item['qty'],
-                    'sell_price'   => $item['sell_price'],
-                    'subtotal'     => $item['qty'] * $item['sell_price'],
+                    'sell_price'   => 0,
+                    'subtotal'     => 0,
                     'hpp_subtotal' => 0,
                 ]);
 
@@ -75,7 +80,12 @@ class SalesOrderService
 
                 $saleItem->update(['hpp_subtotal' => $itemHpp]);
                 $totalHpp += $itemHpp;
+
+                $saleItems[] = $saleItem;
             }
+
+            // Tahap 2: bagi total harga jual ke tiap baris, proporsional terhadap HPP.
+            $this->distributeSellPrice($saleItems, $totalAmount, $totalHpp);
 
             $so->update(['total_hpp' => $totalHpp]);
 
@@ -87,6 +97,57 @@ class SalesOrderService
 
             return $so->fresh(['items.allocations', 'payments', 'otherCosts']);
         });
+    }
+
+    /**
+     * Bagi 1 angka total harga jual (input manual untuk seluruh transaksi,
+     * bukan per unit/baris) ke tiap baris SaleItem, proporsional terhadap
+     * HPP baris tersebut — barang yang modalnya lebih besar otomatis
+     * "menanggung" porsi harga jual yang lebih besar juga. Ini yang membuat
+     * subtotal & margin per barang tetap bisa dihitung meskipun user cuma
+     * input 1 harga total (kasus umum: jualan marketplace yang harganya
+     * sudah dipotong pajak/komisi, jadi susah ditelusuri harga per unit
+     * aslinya). Berlaku untuk berapa pun baris item & produk yang berbeda-beda.
+     *
+     * Kalau total HPP seluruh baris = 0 (mis. semua barang bermodal Rp0),
+     * fallback dibagi rata berdasarkan proporsi qty supaya tidak divide-by-zero.
+     *
+     * Pembulatan: baris TERAKHIR menampung sisa hasil pembulatan baris-baris
+     * sebelumnya, supaya jumlah seluruh subtotal baris persis sama dengan
+     * $totalAmount (tidak melenceng walau 1 rupiah pun).
+     *
+     * @param \App\Models\SaleItem[] $saleItems
+     */
+    protected function distributeSellPrice(array $saleItems, float $totalAmount, float $totalHpp): void
+    {
+        $count = count($saleItems);
+        if ($count === 0) {
+            return;
+        }
+
+        $totalQty  = array_sum(array_map(fn ($i) => (int) $i->qty, $saleItems));
+        $allocated = 0.0;
+
+        foreach ($saleItems as $index => $saleItem) {
+            $isLast = $index === $count - 1;
+
+            if ($isLast) {
+                $subtotal = $totalAmount - $allocated;
+            } elseif ($totalHpp > 0) {
+                $subtotal = round($totalAmount * ((float) $saleItem->hpp_subtotal / $totalHpp), 2);
+            } elseif ($totalQty > 0) {
+                $subtotal = round($totalAmount * ($saleItem->qty / $totalQty), 2);
+            } else {
+                $subtotal = 0;
+            }
+
+            $allocated += $subtotal;
+
+            $saleItem->update([
+                'subtotal'   => $subtotal,
+                'sell_price' => $saleItem->qty > 0 ? round($subtotal / $saleItem->qty, 2) : 0,
+            ]);
+        }
     }
 
     /**
@@ -191,6 +252,25 @@ class SalesOrderService
     }
 
     /**
+     * Hapus pembayaran yang sudah tercatat. paid_amount & payment_status SO
+     * dihitung ulang, dan entry cash_flow terkait ikut dihapus.
+     */
+    public function deletePayment(SalesPayment $payment): void
+    {
+        DB::transaction(function () use ($payment) {
+            $so = $payment->salesOrder()->lockForUpdate()->first();
+
+            $this->cashFlowService->deleteForSource($payment);
+
+            $so->paid_amount = (float) $so->paid_amount - (float) $payment->amount;
+            $so->payment_status = $this->resolvePaymentStatus($so->total_amount, $so->paid_amount);
+            $so->save();
+
+            $payment->delete();
+        });
+    }
+
+    /**
      * Update SO yang sudah ada: ganti data utama + replace semua item lama
      * dengan item baru. Alokasi FIFO lama dikembalikan ke batch asal dulu,
      * baru item baru dialokasikan ulang. Tetap boleh dipanggil meskipun SO
@@ -204,7 +284,9 @@ class SalesOrderService
      * hapus pembayaran dulu supaya tidak terjadi kondisi "kelebihan bayar".
      *
      * @param array $data ['customer_id', 'so_date', 'note', 'source_id', 'estimated_packing_cost']
-     * @param array $items [['product_id', 'qty', 'sell_price'], ...]
+     * @param array $items [['product_id', 'qty'], ...] — TANPA sell_price per baris, sama seperti create().
+     * @param float $totalAmount Total harga jual baru untuk seluruh transaksi (1 angka), dipakai
+     *                            apa adanya, lalu dibagi ke tiap baris lewat distributeSellPrice().
      * @param array $otherCosts [['expense_category_id', 'amount', 'description'], ...] — akan
      *                          MENGGANTI seluruh biaya lainnya lama milik SO ini (lihat syncOtherCosts).
      *
@@ -212,17 +294,12 @@ class SalesOrderService
      *                            cukup untuk item baru, atau total baru lebih
      *                            kecil dari paid_amount
      */
-    public function update(SalesOrder $so, array $data, array $items, array $otherCosts = []): SalesOrder
+    public function update(SalesOrder $so, array $data, array $items, float $totalAmount, array $otherCosts = []): SalesOrder
     {
-        return DB::transaction(function () use ($so, $data, $items, $otherCosts) {
+        return DB::transaction(function () use ($so, $data, $items, $totalAmount, $otherCosts) {
             $so->loadMissing('items.allocations');
 
             $this->guardCanModify($so);
-
-            $totalAmount = 0;
-            foreach ($items as $item) {
-                $totalAmount += $item['qty'] * $item['sell_price'];
-            }
 
             if ($totalAmount < (float) $so->paid_amount) {
                 throw new \RuntimeException(
@@ -250,7 +327,8 @@ class SalesOrderService
                 'payment_status' => $this->resolvePaymentStatus($totalAmount, (float) $so->paid_amount),
             ]);
 
-            $totalHpp = 0;
+            $saleItems = [];
+            $totalHpp  = 0;
 
             foreach ($items as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item['product_id']);
@@ -258,8 +336,8 @@ class SalesOrderService
                 $saleItem = $so->items()->create([
                     'product_id'   => $product->id,
                     'qty'          => $item['qty'],
-                    'sell_price'   => $item['sell_price'],
-                    'subtotal'     => $item['qty'] * $item['sell_price'],
+                    'sell_price'   => 0,
+                    'subtotal'     => 0,
                     'hpp_subtotal' => 0,
                 ]);
 
@@ -278,7 +356,11 @@ class SalesOrderService
 
                 $saleItem->update(['hpp_subtotal' => $itemHpp]);
                 $totalHpp += $itemHpp;
+
+                $saleItems[] = $saleItem;
             }
+
+            $this->distributeSellPrice($saleItems, $totalAmount, $totalHpp);
 
             $so->update(['total_hpp' => $totalHpp]);
 

@@ -24,7 +24,11 @@ class StoreSalesOrderRequest extends FormRequest
             'items'                    => ['required', 'array', 'min:1'],
             'items.*.product_id'       => ['required', 'exists:products,id'],
             'items.*.qty'              => ['required', 'integer', 'min:1'],
-            'items.*.sell_price'       => ['required', 'numeric', 'min:0'],
+
+            // Harga jual TIDAK lagi diinput per unit/baris — cukup 1 angka total
+            // untuk seluruh transaksi (lihat SalesOrderService::distributeSellPrice
+            // untuk cara pembagiannya ke tiap baris item berdasarkan proporsi HPP).
+            'total_amount'             => ['required', 'numeric', 'min:0.01'],
 
             'initial_payment'          => ['nullable', 'numeric', 'min:0'],
             'payment_method'           => ['nullable', 'in:cash,transfer,other'],

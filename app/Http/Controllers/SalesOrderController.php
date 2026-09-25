@@ -158,6 +158,7 @@ class SalesOrderController extends Controller
                     'estimated_packing_cost' => $validated['estimated_packing_cost'] ?? 0,
                 ],
                 items: $validated['items'],
+                totalAmount: $validated['total_amount'],
                 otherCosts: $validated['other_costs'] ?? [],
             );
         } catch (\RuntimeException $e) {
@@ -200,6 +201,7 @@ class SalesOrderController extends Controller
                     'estimated_packing_cost' => $validated['estimated_packing_cost'] ?? 0,
                 ],
                 items: $validated['items'],
+                totalAmount: $validated['total_amount'],
                 initialPayment: $validated['initial_payment'] ?? null,
                 paymentMethod: $validated['payment_method'] ?? 'cash',
                 otherCosts: $validated['other_costs'] ?? [],
@@ -250,5 +252,22 @@ class SalesOrderController extends Controller
         }
 
         return back()->with('success', 'Pembayaran berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus pembayaran yang sudah tercatat. paid_amount, payment_status SO,
+     * dan entry cash_flow terkait ikut dibersihkan di service.
+     */
+    public function destroyPayment(SalesOrder $salesOrder, SalesPayment $payment)
+    {
+        abort_unless($payment->sales_order_id === $salesOrder->id, 404);
+
+        try {
+            $this->service->deletePayment($payment);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Pembayaran berhasil dihapus.');
     }
 }

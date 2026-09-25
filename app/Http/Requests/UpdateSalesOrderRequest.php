@@ -27,7 +27,10 @@ class UpdateSalesOrderRequest extends FormRequest
             'items'                    => ['required', 'array', 'min:1'],
             'items.*.product_id'       => ['required', 'exists:products,id'],
             'items.*.qty'              => ['required', 'integer', 'min:1'],
-            'items.*.sell_price'       => ['required', 'numeric', 'min:0'],
+
+            // Sama seperti Store: harga jual 1 angka total untuk seluruh transaksi,
+            // bukan per baris item (lihat SalesOrderService::distributeSellPrice).
+            'total_amount'             => ['required', 'numeric', 'min:0.01'],
 
             'other_costs'                             => ['nullable', 'array'],
             'other_costs.*.expense_category_id'       => ['required', 'exists:expense_categories,id'],

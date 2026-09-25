@@ -306,10 +306,20 @@
                                         </p>
                                     </div>
                                     @if (auth()->user()->isSuperadmin())
-                                        <button type="button" @click="editing = true"
-                                                class="text-ink/40 hover:text-amber-700 p-1.5 shrink-0" title="Edit pembayaran">
-                                            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                                        </button>
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <button type="button" @click="editing = true"
+                                                    class="text-ink/40 hover:text-amber-700 p-1.5" title="Edit pembayaran">
+                                                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                            </button>
+                                            <form method="POST" action="{{ route('sales-orders.payments.destroy', [$salesOrder, $payment]) }}"
+                                                  onsubmit="return confirm('Hapus pembayaran ini? Sisa piutang & catatan arus kas terkait akan dihitung ulang.');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-ink/40 hover:text-red-600 p-1.5" title="Hapus pembayaran">
+                                                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                                </button>
+                                            </form>
+                                        </div>
                                     @endif
                                 </div>
 

@@ -304,7 +304,7 @@ class GenerateDemoData extends Command
                 'unpaid'  => null,
             };
 
-            $so = $this->soService->create($data, $items, $initialPayment ? (float) $initialPayment : null);
+            $so = $this->soService->create($data, $items, (float) $totalAmount, $initialPayment ? (float) $initialPayment : null);
 
             if ($status === 'partial') {
                 $remaining = (float) $so->total_amount - (float) $so->paid_amount;

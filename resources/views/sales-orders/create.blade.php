@@ -8,7 +8,7 @@
         {{ Illuminate\Support\Js::from($customers) }},
         {{ Illuminate\Support\Js::from($products) }},
         {{ Illuminate\Support\Js::from($sources) }},
-        {{ Illuminate\Support\Js::from(old('items', [['product_id' => '', 'qty' => 1, 'sell_price' => '']])) }},
+        {{ Illuminate\Support\Js::from(old('items', [['product_id' => '', 'qty' => 1]])) }},
         {{ Illuminate\Support\Js::from($expenseCategories) }},
         {{ Illuminate\Support\Js::from(old('other_costs', [])) }}
     )"
@@ -100,8 +100,8 @@
             <div class="divide-y divide-ink/[0.06]">
                 <template x-for="(item, index) in items" :key="item.key">
                     <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
-                        <div class="@4xl:col-span-5">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Produk <span class="text-red-600">*</span></label>
+                        <div class="@4xl:col-span-8">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Produk <span class="text-red-600">*</span></label>
                             <div class="relative">
                                 <select :name="'items['+index+'][product_id]'" x-init="initProductSelect($el, item)"></select>
                             </div>
@@ -112,36 +112,13 @@
                             </p>
                         </div>
 
-                        <div class="@4xl:col-span-2">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Qty <span class="text-red-600">*</span></label>
+                        <div class="@4xl:col-span-3">
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Qty <span class="text-red-600">*</span></label>
                             <input type="number" min="1" :name="'items['+index+'][qty]'" x-model.number="item.qty"
                                    class="w-full rounded-xl border px-3.5 py-2.5 text-sm tnum focus:outline-none focus:ring-4 transition-shadow"
                                    :class="exceedsStock(item)
                                         ? 'border-red-400 focus:border-red-500 focus:ring-red-500/15'
                                         : 'border-ink/12 focus:border-amber-500 focus:ring-amber-500/15'">
-                        </div>
-
-                        <div class="@4xl:col-span-3">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Harga Jual / Unit <span class="text-red-600">*</span></label>
-                            <div class="relative">
-                                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
-                                <input type="text" inputmode="numeric"
-                                       :value="formatRupiah(item.sell_price)"
-                                       @input="item.sell_price = parseRupiah($event.target.value); $event.target.value = formatRupiah(item.sell_price)"
-                                       class="w-full rounded-xl border pl-9 pr-3.5 py-2.5 text-sm tnum focus:outline-none focus:ring-4 transition-shadow"
-                                       :class="belowCost(item)
-                                            ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/15'
-                                            : 'border-ink/12 focus:border-amber-500 focus:ring-amber-500/15'">
-                                <input type="hidden" :name="'items['+index+'][sell_price]'" :value="item.sell_price">
-                            </div>
-                            <p class="text-xs text-amber-700 font-medium mt-1" x-show="belowCost(item)" x-cloak>
-                                Di bawah harga beli (Rp <span x-text="formatRupiah(buyPriceFor(item.product_id))"></span>)
-                            </p>
-                        </div>
-
-                        <div class="@4xl:col-span-1">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Subtotal</label>
-                            <p class="text-sm font-medium tnum py-2.5" x-text="formatRupiah((item.qty || 0) * (item.sell_price || 0))"></p>
                         </div>
 
                         <div class="@4xl:col-span-1 flex sm:justify-end sm:pt-6">
@@ -155,14 +132,44 @@
             </div>
 
             <div class="px-6 py-4 bg-ink/[0.02] flex items-center justify-between">
-                <span class="text-sm font-medium text-ink/60">Total Transaksi</span>
-                <span class="font-display font-semibold text-lg tnum" x-text="'Rp ' + formatRupiah(total)"></span>
+                <span class="text-sm font-medium text-ink/60">Total Qty Barang</span>
+                <span class="font-display font-semibold text-lg tnum" x-text="totalQty"></span>
             </div>
         </div>
         @error('items')<p class="text-xs text-red-600 -mt-4 mb-6">{{ $message }}</p>@enderror
         <p class="text-xs text-red-600 -mt-4 mb-6" x-show="hasStockError" x-cloak>
             Ada baris dengan qty melebihi stok tersedia — perbaiki dulu sebelum menyimpan.
         </p>
+
+        {{-- Harga jual --}}
+        <div class="rounded-2xl border border-ink/10 bg-white shadow-card p-6 mb-6">
+            <h3 class="font-display font-semibold mb-1">Harga Jual <span class="text-red-600">*</span></h3>
+            <p class="text-xs text-ink/50 mb-4">
+                Total harga jual seluruh transaksi ini (bukan per unit) — cocok untuk penjualan marketplace
+                yang harganya sudah berupa angka total setelah potongan pajak/komisi. Sistem otomatis membagi
+                angka ini ke tiap barang secara proporsional terhadap HPP-nya untuk keperluan perhitungan margin.
+            </p>
+            <div class="max-w-xs">
+                <div class="relative">
+                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
+                    <input type="text" inputmode="numeric"
+                           :value="formatRupiah(totalAmount)"
+                           @input="totalAmount = parseRupiah($event.target.value); $event.target.value = formatRupiah(totalAmount)"
+                           class="w-full rounded-xl border pl-9 pr-3.5 py-2.5 text-sm tnum focus:outline-none focus:ring-4 transition-shadow"
+                           :class="belowEstimatedCost
+                                ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/15'
+                                : 'border-ink/12 focus:border-amber-500 focus:ring-amber-500/15'">
+                    <input type="hidden" name="total_amount" :value="totalAmount">
+                </div>
+                @error('total_amount')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                <p class="text-xs text-ink/40 mt-1.5">
+                    Estimasi total modal (HPP): Rp <span x-text="formatRupiah(estimatedHpp)"></span>
+                </p>
+                <p class="text-xs text-amber-700 font-medium mt-1" x-show="belowEstimatedCost" x-cloak>
+                    Harga jual di bawah estimasi total modal, transaksi ini kemungkinan rugi.
+                </p>
+            </div>
+        </div>
 
         {{-- Biaya lainnya --}}
         <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden mb-6">
@@ -182,7 +189,7 @@
                 <template x-for="(cost, index) in otherCosts" :key="cost.key">
                     <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
                         <div class="@4xl:col-span-4">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Kategori</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Kategori</label>
                             <div class="relative">
                                 <select :name="'other_costs['+index+'][expense_category_id]'" x-init="initExpenseCategorySelect($el, cost)">
                                     <option value="">— Pilih kategori —</option>
@@ -194,7 +201,7 @@
                         </div>
 
                         <div class="@4xl:col-span-3">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Jumlah</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Jumlah</label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
                                 <input type="text" inputmode="numeric"
@@ -206,7 +213,7 @@
                         </div>
 
                         <div class="@4xl:col-span-4">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Keterangan</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Keterangan</label>
                             <input type="text" :name="'other_costs['+index+'][description]'" x-model="cost.description" placeholder="Opsional"
                                    class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
                         </div>
@@ -250,35 +257,6 @@
                     <input type="hidden" name="estimated_packing_cost" :value="packingCost">
                 </div>
                 @error('estimated_packing_cost')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-            </div>
-        </div>
-
-        {{-- Pembayaran awal --}}
-        <div class="rounded-2xl border border-ink/10 bg-white shadow-card p-6 mb-6">
-            <h3 class="font-display font-semibold mb-1">Pembayaran Awal</h3>
-            <p class="text-xs text-ink/50 mb-4">Opsional — kosongkan kalau belum ada pembayaran sama sekali (status akan "Belum Bayar").</p>
-            <div class="grid grid-cols-1 @4xl:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1.5">Jumlah Dibayar</label>
-                    <div class="relative">
-                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
-                        <input type="text" inputmode="numeric"
-                               :value="formatRupiah(initialPayment)"
-                               @input="initialPayment = parseRupiah($event.target.value); $event.target.value = formatRupiah(initialPayment)"
-                               class="w-full rounded-xl border border-ink/12 pl-9 pr-3.5 py-2.5 text-sm tnum focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
-                        <input type="hidden" name="initial_payment" :value="initialPayment">
-                    </div>
-                    @error('initial_payment')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1.5">Metode Pembayaran</label>
-                    <select name="payment_method" x-model="paymentMethod"
-                            class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
-                        <option value="cash">Tunai</option>
-                        <option value="transfer">Transfer</option>
-                        <option value="other">Lainnya</option>
-                    </select>
-                </div>
             </div>
         </div>
 
@@ -428,7 +406,6 @@
                 key: Math.random().toString(36).slice(2),
                 product_id: i.product_id || '',
                 qty: i.qty || 1,
-                sell_price: i.sell_price || '',
             })),
             otherCosts: initialOtherCosts.map(c => ({
                 key: Math.random().toString(36).slice(2),
@@ -436,8 +413,7 @@
                 amount: c.amount || '',
                 description: c.description || '',
             })),
-            initialPayment: {{ (int) old('initial_payment', 0) }} || '',
-            paymentMethod: '{{ old('payment_method', 'cash') }}',
+            totalAmount: {{ (int) old('total_amount', 0) }} || '',
 
             customerModalOpen: false,
             customerSaving: false,
@@ -521,7 +497,7 @@
             },
 
             addItem() {
-                this.items.push({ key: Math.random().toString(36).slice(2), product_id: '', qty: 1, sell_price: '' });
+                this.items.push({ key: Math.random().toString(36).slice(2), product_id: '', qty: 1 });
             },
 
             removeItem(key) {
@@ -559,6 +535,8 @@
 
             // Harga beli acuan = harga beli batch tertua yang masih ada stok (batch yang
             // bakal benar-benar kepakai duluan kalau produk ini dijual sekarang, sesuai FIFO).
+            // Dipakai buat estimasi total modal di bawah, BUKAN buat disimpan ke SO — harga
+            // jual riil per baris dihitung server-side dari pembagian proporsional HPP.
             buyPriceFor(productId) {
                 const p = this.products.find(p => p.id == productId);
                 return p && p.next_buy_price !== null && p.next_buy_price !== undefined
@@ -566,15 +544,23 @@
                     : null;
             },
 
-            belowCost(item) {
-                if (!item.product_id || !item.sell_price) return false;
-                const buyPrice = this.buyPriceFor(item.product_id);
-                if (buyPrice === null) return false;
-                return parseFloat(item.sell_price) < buyPrice;
+            get totalQty() {
+                return this.items.reduce((sum, i) => sum + (parseInt(i.qty) || 0), 0);
             },
 
-            get total() {
-                return this.items.reduce((sum, i) => sum + ((parseInt(i.qty) || 0) * (parseFloat(i.sell_price) || 0)), 0);
+            // Estimasi total modal (HPP) seluruh transaksi, dari harga beli batch
+            // tertua tiap produk — cuma buat gambaran & warning di form, angka HPP
+            // riil (dari alokasi FIFO sesungguhnya) tetap dihitung di server saat submit.
+            get estimatedHpp() {
+                return this.items.reduce((sum, i) => {
+                    const buyPrice = this.buyPriceFor(i.product_id);
+                    return sum + ((parseInt(i.qty) || 0) * (buyPrice || 0));
+                }, 0);
+            },
+
+            get belowEstimatedCost() {
+                if (!this.totalAmount) return false;
+                return parseFloat(this.totalAmount) < this.estimatedHpp;
             },
 
             onSubmit(e) {
@@ -583,14 +569,15 @@
                     return;
                 }
 
-                const belowCostItems = this.items.filter(i => this.belowCost(i));
-                if (belowCostItems.length > 0) {
-                    const names = belowCostItems
-                        .map(i => (this.products.find(p => p.id == i.product_id) || {}).name)
-                        .filter(Boolean)
-                        .join(', ');
+                if (!this.totalAmount || parseFloat(this.totalAmount) <= 0) {
+                    alert('Isi harga jual total transaksi ini dulu.');
+                    e.preventDefault();
+                    return;
+                }
+
+                if (this.belowEstimatedCost) {
                     const ok = confirm(
-                        'Harga jual untuk ' + names + ' ditulis di bawah harga beli, transaksi ini akan rugi. ' +
+                        'Harga jual total ditulis di bawah estimasi total modal, transaksi ini kemungkinan rugi. ' +
                         'Lanjutkan simpan transaksi ini?'
                     );
                     if (!ok) {

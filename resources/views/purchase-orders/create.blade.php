@@ -72,7 +72,7 @@
                 <template x-for="(item, index) in items" :key="item.key">
                     <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
                         <div class="@4xl:col-span-5">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Produk</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Produk</label>
                             <div class="relative">
                                 <select :name="'items['+index+'][product_id]'" x-init="initProductSelect($el, item)">
                                     <option value="">— Pilih produk —</option>
@@ -87,13 +87,13 @@
                         </div>
 
                         <div class="@4xl:col-span-2">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Qty</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Qty</label>
                             <input type="number" min="1" :name="'items['+index+'][qty]'" x-model.number="item.qty"
                                    class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm tnum focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
                         </div>
 
                         <div class="@4xl:col-span-3">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Harga Beli / Unit</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Harga Beli / Unit</label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
                                 <input type="text" inputmode="numeric"
@@ -105,7 +105,7 @@
                         </div>
 
                         <div class="@4xl:col-span-1">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Subtotal</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Subtotal</label>
                             <p class="text-sm font-medium tnum py-2.5" x-text="formatRupiah((item.qty || 0) * (item.buy_price || 0))"></p>
                         </div>
 
@@ -144,7 +144,7 @@
                 <template x-for="(cost, index) in otherCosts" :key="cost.key">
                     <div class="p-5 grid grid-cols-1 @4xl:grid-cols-12 gap-3 sm:items-start">
                         <div class="@4xl:col-span-4">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Kategori</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Kategori</label>
                             <div class="relative">
                                 <select :name="'other_costs['+index+'][expense_category_id]'" x-init="initExpenseCategorySelect($el, cost)">
                                     <option value="">— Pilih kategori —</option>
@@ -156,7 +156,7 @@
                         </div>
 
                         <div class="@4xl:col-span-3">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Jumlah</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Jumlah</label>
                             <div class="relative">
                                 <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
                                 <input type="text" inputmode="numeric"
@@ -168,7 +168,7 @@
                         </div>
 
                         <div class="@4xl:col-span-4">
-                            <label class="block text-xs font-medium text-ink/50 mb-1.5" x-show="index === 0">Keterangan</label>
+                            <label class="block text-xs font-medium text-ink/50 mb-1.5">Keterangan</label>
                             <input type="text" :name="'other_costs['+index+'][description]'" x-model="cost.description" placeholder="Opsional"
                                    class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
                         </div>
@@ -191,35 +191,6 @@
             <p class="px-6 py-5 text-sm text-ink/40" x-show="otherCosts.length === 0">Belum ada biaya lainnya ditambahkan.</p>
         </div>
         @error('other_costs')<p class="text-xs text-red-600 -mt-4 mb-6">{{ $message }}</p>@enderror
-
-        {{-- Pembayaran awal --}}
-        <div class="rounded-2xl border border-ink/10 bg-white shadow-card p-6 mb-6">
-            <h3 class="font-display font-semibold mb-1">Pembayaran Awal</h3>
-            <p class="text-xs text-ink/50 mb-4">Opsional — kosongkan kalau belum ada pembayaran sama sekali (status akan "Belum Bayar").</p>
-            <div class="grid grid-cols-1 @4xl:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1.5">Jumlah Dibayar</label>
-                    <div class="relative">
-                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink/40">Rp</span>
-                        <input type="text" inputmode="numeric"
-                               :value="formatRupiah(initialPayment)"
-                               @input="initialPayment = parseRupiah($event.target.value); $event.target.value = formatRupiah(initialPayment)"
-                               class="w-full rounded-xl border border-ink/12 pl-9 pr-3.5 py-2.5 text-sm tnum focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
-                        <input type="hidden" name="initial_payment" :value="initialPayment">
-                    </div>
-                    @error('initial_payment')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1.5">Metode Pembayaran</label>
-                    <select name="payment_method" x-model="paymentMethod"
-                            class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
-                        <option value="cash">Tunai</option>
-                        <option value="transfer">Transfer</option>
-                        <option value="other">Lainnya</option>
-                    </select>
-                </div>
-            </div>
-        </div>
 
         <div class="flex justify-end gap-3">
             <a href="{{ route('purchase-orders.index') }}"
@@ -252,8 +223,6 @@
                 amount: c.amount || '',
                 description: c.description || '',
             })),
-            initialPayment: {{ (int) old('initial_payment', 0) }} || '',
-            paymentMethod: '{{ old('payment_method', 'cash') }}',
 
             addItem() {
                 this.items.push({ key: Math.random().toString(36).slice(2), product_id: '', qty: 1, buy_price: '' });
