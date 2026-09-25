@@ -40,6 +40,29 @@
 
         @if ($salesOrder->canBeModified() && auth()->user()->isSuperadmin())
             <div class="flex items-center gap-2">
+                @if ($salesOrder->remaining_balance > 0)
+                    <form method="POST" action="{{ route('sales-orders.payments.store', $salesOrder) }}"
+                          onsubmit="return confirm('Tandai transaksi {{ $salesOrder->so_number }} lunas? Sisa piutang Rp {{ number_format($salesOrder->remaining_balance, 0, ',', '.') }} akan dicatat sebagai pembayaran hari ini.');"
+                          class="flex items-center gap-1.5">
+                        @csrf
+                        <input type="hidden" name="payment_date" value="{{ now()->toDateString() }}">
+                        <input type="hidden" name="amount" value="{{ (int) round($salesOrder->remaining_balance) }}">
+                        <input type="hidden" name="method" value="cash">
+                        <input type="hidden" name="note" value="Pelunasan otomatis">
+                        <select name="cash_id" required
+                                class="rounded-xl border border-ink/12 px-2.5 py-2.5 text-xs bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                            <option value="">Pilih kas&hellip;</option>
+                            @foreach ($cashes as $cashOption)
+                                <option value="{{ $cashOption->id }}">{{ $cashOption->name }} (Rp {{ number_format($cashOption->current_balance, 0, ',', '.') }})</option>
+                            @endforeach
+                        </select>
+                        <button type="submit"
+                                class="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors">
+                            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            Lunas
+                        </button>
+                    </form>
+                @endif
                 <a href="{{ route('sales-orders.edit', $salesOrder) }}"
                    class="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl border border-ink/12 hover:bg-ink/[0.03] transition-colors">
                     <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -249,6 +272,20 @@
                                        class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
                             </div>
 
+                            <div>
+                                <label class="block text-sm font-medium mb-1.5">Kas Sumber Refund</label>
+                                <select name="cash_id"
+                                        class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                                    <option value="">Tidak ada refund</option>
+                                    @foreach ($cashes as $cashOption)
+                                        <option value="{{ $cashOption->id }}">{{ $cashOption->name }} (Rp {{ number_format($cashOption->current_balance, 0, ',', '.') }})</option>
+                                    @endforeach
+                                </select>
+                                <p class="text-xs text-ink/40 mt-1">
+                                    Isi hanya kalau SO ini sudah kadung dibayar customer lebih dari sisa piutang setelah retur — kelebihannya akan dicatat sebagai kas keluar (refund) dari kas yang dipilih.
+                                </p>
+                            </div>
+
                             <div class="space-y-3">
                                 @foreach ($returnableItems as $item)
                                     @php $maxQty = $item->qty - $item->qty_returned; @endphp
@@ -302,6 +339,7 @@
                                         <p class="text-xs text-ink/40">
                                             {{ $payment->payment_date->format('d M Y') }} &middot;
                                             {{ ['cash' => 'Tunai', 'transfer' => 'Transfer', 'other' => 'Lainnya'][$payment->method] ?? $payment->method }}
+                                            @if ($payment->cash) &middot; {{ $payment->cash->name }} @endif
                                             @if ($payment->note) &middot; {{ $payment->note }} @endif
                                         </p>
                                     </div>
@@ -358,6 +396,15 @@
                                                     <option value="cash" @selected($payment->method === 'cash')>Tunai</option>
                                                     <option value="transfer" @selected($payment->method === 'transfer')>Transfer</option>
                                                     <option value="other" @selected($payment->method === 'other')>Lainnya</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-ink/50 mb-1">Kas</label>
+                                                <select name="cash_id" required class="w-full rounded-lg border border-ink/12 px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                                                    <option value="">Pilih kas&hellip;</option>
+                                                    @foreach ($cashes as $cashOption)
+                                                        <option value="{{ $cashOption->id }}" @selected($payment->cash_id === $cashOption->id)>{{ $cashOption->name }}</option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                             <div>
@@ -491,6 +538,16 @@
                                     <option value="cash">Tunai</option>
                                     <option value="transfer">Transfer</option>
                                     <option value="other">Lainnya</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1.5">Kas</label>
+                                <select name="cash_id" required
+                                        class="w-full rounded-xl border border-ink/12 px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15 transition-shadow">
+                                    <option value="">Pilih kas&hellip;</option>
+                                    @foreach ($cashes as $cashOption)
+                                        <option value="{{ $cashOption->id }}">{{ $cashOption->name }} (Rp {{ number_format($cashOption->current_balance, 0, ',', '.') }})</option>
+                                    @endforeach
                                 </select>
                             </div>
                             <div>

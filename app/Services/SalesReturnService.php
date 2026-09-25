@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\CashFlow;
 use App\Models\SaleItem;
 use App\Models\SaleReturnItemAllocation;
@@ -15,6 +16,7 @@ class SalesReturnService
     public function __construct(
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
+        protected CashService $cashService,
         protected DocumentNumberService $numberService,
     ) {}
 
@@ -31,12 +33,16 @@ class SalesReturnService
      *
      * @param array $data ['return_date', 'note']
      * @param array $items [['sale_item_id', 'qty'], ...]
+     * @param Cash|null $cash kas sumber refund ke customer kalau retur ini bikin SO overpaid.
+     *                        Boleh null selama tidak terjadi overpaid; kalau ternyata
+     *                        overpaid dan kas tidak diisi, akan dilempar RuntimeException.
      *
-     * @throws RuntimeException kalau item bukan milik SO ini, atau qty retur melebihi qty yang belum diretur
+     * @throws RuntimeException kalau item bukan milik SO ini, qty retur melebihi qty yang belum diretur,
+     *                           atau terjadi overpaid tapi kas refund tidak diisi/tidak cukup
      */
-    public function create(SalesOrder $so, array $data, array $items): SalesReturn
+    public function create(SalesOrder $so, array $data, array $items, ?Cash $cash = null): SalesReturn
     {
-        return DB::transaction(function () use ($so, $data, $items) {
+        return DB::transaction(function () use ($so, $data, $items, $cash) {
             $so = SalesOrder::where('id', $so->id)->lockForUpdate()->first();
 
             if (empty($items)) {
@@ -158,11 +164,21 @@ class SalesReturnService
             // jejak historis uang yang benar-benar sudah diterima).
             $overpaid = (float) $so->paid_amount - (float) $so->total_amount;
             if ($overpaid > 0) {
+                if (! $cash) {
+                    throw new RuntimeException(
+                        "Retur ini membuat SO #{$so->so_number} overpaid sebesar Rp ".number_format($overpaid, 0, ',', '.').
+                        ' — pilih kas sumber refund untuk melanjutkan.'
+                    );
+                }
+
+                $this->cashService->decrease($cash, $overpaid);
+
                 $this->cashFlowService->recordOut(
                     $data['return_date'],
                     $overpaid,
                     $return,
-                    "Refund retur {$return->return_number} — SO #{$so->so_number} ke " . ($so->customer->name ?? '-')
+                    "Refund retur {$return->return_number} — SO #{$so->so_number} ke " . ($so->customer->name ?? '-'),
+                    $cash
                 );
             }
 
@@ -172,8 +188,9 @@ class SalesReturnService
 
     /**
      * Hapus/batalkan retur: keluarkan lagi qty dari batch stok, kembalikan
-     * total_amount & total_hpp SO (tambah balik senilai retur), dan hapus entry
-     * kas keluar (refund) yang tercatat waktu retur ini dibuat kalau ada.
+     * total_amount & total_hpp SO (tambah balik senilai retur), kembalikan saldo
+     * kas yang sempat berkurang dari refund retur ini (kalau ada), dan hapus entry
+     * kas keluar (refund) yang tercatat waktu retur ini dibuat.
      *
      * @throws RuntimeException kalau ada barang hasil retur ini yang sudah kadung
      *                          terjual lagi/diretur ke supplier (lihat StockService::undoReturnFromCustomer())
@@ -200,9 +217,20 @@ class SalesReturnService
             $so->payment_status = $this->resolvePaymentStatus($so->total_amount, $so->paid_amount);
             $so->save();
 
-            // Hapus entry kas keluar (refund) yang tercatat waktu retur ini dibuat
-            // (kalau dulu SO sempat overpaid setelah retur ini). Kalau tidak ada
-            // entry (retur dulu tidak memicu refund), ini no-op.
+            // Balikkan saldo kas yang sempat berkurang dari refund retur ini
+            // (kalau dulu SO sempat overpaid setelah retur ini), lalu hapus
+            // entry kas keluarnya. Kalau tidak ada entry (retur dulu tidak
+            // memicu refund), loop ini no-op.
+            $refundFlows = CashFlow::where('source_type', SalesReturn::class)
+                ->where('source_id', $return->id)
+                ->get();
+
+            foreach ($refundFlows as $flow) {
+                if ($flow->cash_id) {
+                    $this->cashService->increase(Cash::findOrFail($flow->cash_id), (float) $flow->amount);
+                }
+            }
+
             CashFlow::where('source_type', SalesReturn::class)
                 ->where('source_id', $return->id)
                 ->delete();

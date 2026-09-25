@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class SalesPayment extends Model
 {
-    protected $fillable = ['sales_order_id', 'payment_date', 'amount', 'method', 'note'];
+    protected $fillable = ['sales_order_id', 'cash_id', 'payment_date', 'amount', 'method', 'note'];
 
     protected $casts = [
         'payment_date' => 'date',
@@ -16,5 +16,10 @@ class SalesPayment extends Model
     public function salesOrder()
     {
         return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function cash()
+    {
+        return $this->belongsTo(Cash::class);
     }
 }

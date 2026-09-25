@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\Product;
 use App\Models\SalesOrder;
 use App\Models\SalesPayment;
@@ -12,6 +13,7 @@ class SalesOrderService
     public function __construct(
         protected StockService $stockService,
         protected CashFlowService $cashFlowService,
+        protected CashService $cashService,
         protected DocumentNumberService $numberService,
         protected ExpenseService $expenseService,
     ) {}
@@ -33,10 +35,12 @@ class SalesOrderService
      *                          tambahan (packing, ongkir, dll), opsional & boleh lebih dari satu.
      *                          Tiap baris otomatis jadi record Expense terpisah yang terhubung ke
      *                          SO ini, TAPI tidak menambah total_amount/paid_amount SO.
+     * @param Cash|null $cash kas yang menerima pembayaran awal — WAJIB diisi kalau
+     *                        $initialPayment diisi (divalidasi di StoreSalesOrderRequest).
      */
-    public function create(array $data, array $items, float $totalAmount, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = []): SalesOrder
+    public function create(array $data, array $items, float $totalAmount, ?float $initialPayment = null, string $paymentMethod = 'cash', array $otherCosts = [], ?Cash $cash = null): SalesOrder
     {
-        return DB::transaction(function () use ($data, $items, $totalAmount, $initialPayment, $paymentMethod, $otherCosts) {
+        return DB::transaction(function () use ($data, $items, $totalAmount, $initialPayment, $paymentMethod, $otherCosts, $cash) {
             $data['so_number'] ??= $this->numberService->generate('SO', SalesOrder::class, 'so_number');
 
             $so = SalesOrder::create([
@@ -92,7 +96,11 @@ class SalesOrderService
             $this->syncOtherCosts($so, $otherCosts);
 
             if ($initialPayment && $initialPayment > 0) {
-                $this->addPayment($so, $so->so_date, $initialPayment, $paymentMethod, 'Pembayaran awal saat transaksi');
+                if (! $cash) {
+                    throw new \RuntimeException('Kas untuk pembayaran awal wajib dipilih.');
+                }
+
+                $this->addPayment($so, $so->so_date, $initialPayment, $cash, $paymentMethod, 'Pembayaran awal saat transaksi');
             }
 
             return $so->fresh(['items.allocations', 'payments', 'otherCosts']);
@@ -176,9 +184,9 @@ class SalesOrderService
         }
     }
 
-    public function addPayment(SalesOrder $so, string $date, float $amount, string $method = 'cash', ?string $note = null): SalesPayment
+    public function addPayment(SalesOrder $so, string $date, float $amount, Cash $cash, string $method = 'cash', ?string $note = null): SalesPayment
     {
-        return DB::transaction(function () use ($so, $date, $amount, $method, $note) {
+        return DB::transaction(function () use ($so, $date, $amount, $cash, $method, $note) {
             $remaining = $so->total_amount - $so->paid_amount;
 
             if ($amount > $remaining) {
@@ -187,7 +195,11 @@ class SalesOrderService
                 );
             }
 
+            // Kas bertambah karena ini pembayaran yang DITERIMA dari customer.
+            $this->cashService->increase($cash, $amount);
+
             $payment = $so->payments()->create([
+                'cash_id'      => $cash->id,
                 'payment_date' => $date,
                 'amount'       => $amount,
                 'method'       => $method,
@@ -202,7 +214,8 @@ class SalesOrderService
                 $date,
                 $amount,
                 $payment,
-                "Pembayaran SO #{$so->so_number} dari " . ($so->customer->name ?? '-')
+                "Pembayaran SO #{$so->so_number} dari " . ($so->customer->name ?? '-'),
+                $cash
             );
 
             return $payment;
@@ -214,9 +227,10 @@ class SalesOrderService
      * paid_amount & payment_status SO dihitung ulang otomatis, dan entry cash_flow
      * terkait ikut disinkronkan — semua dalam satu transaksi supaya konsisten.
      *
-     * @param array $data ['payment_date', 'amount', 'method', 'note']
+     * @param array $data ['payment_date', 'amount', 'method', 'note', 'cash_id']
      *
-     * @throws \RuntimeException kalau nominal baru bikin total pembayaran melebihi total SO
+     * @throws \RuntimeException kalau nominal baru bikin total pembayaran melebihi total SO,
+     *                            atau saldo kas (baru/lama) tidak cukup untuk penyesuaian
      */
     public function updatePayment(SalesPayment $payment, array $data): SalesPayment
     {
@@ -234,7 +248,21 @@ class SalesOrderService
                 );
             }
 
+            $oldCash = $payment->cash_id ? Cash::find($payment->cash_id) : null;
+            $newCash = Cash::findOrFail($data['cash_id']);
+
+            // Balikkan dulu efek pembayaran lama dari kas lamanya (kalau ada) —
+            // karena ini pembayaran yang DITERIMA, membalikkannya berarti
+            // mengurangi saldo kas lama — baru tambahkan ke kas baru sebesar
+            // nominal baru. Dilakukan terpisah (bukan cuma selisih) supaya tetap
+            // benar meskipun kasnya berubah.
+            if ($oldCash) {
+                $this->cashService->decrease($oldCash, $oldAmount);
+            }
+            $this->cashService->increase($newCash, $newAmount);
+
             $payment->update([
+                'cash_id'      => $newCash->id,
                 'payment_date' => $data['payment_date'],
                 'amount'       => $newAmount,
                 'method'       => $data['method'],
@@ -245,7 +273,7 @@ class SalesOrderService
             $so->payment_status = $this->resolvePaymentStatus($so->total_amount, $newPaidTotal);
             $so->save();
 
-            $this->cashFlowService->updateForSource($payment, $data['payment_date'], $newAmount);
+            $this->cashFlowService->updateForSource($payment, $data['payment_date'], $newAmount, $newCash);
 
             return $payment->fresh();
         });
@@ -253,12 +281,20 @@ class SalesOrderService
 
     /**
      * Hapus pembayaran yang sudah tercatat. paid_amount & payment_status SO
-     * dihitung ulang, dan entry cash_flow terkait ikut dihapus.
+     * dihitung ulang, saldo kas yang sempat bertambah dikembalikan (dikurangi),
+     * dan entry cash_flow terkait ikut dihapus.
+     *
+     * @throws \RuntimeException kalau saldo kas terkait tidak cukup untuk dikurangi
+     *                            (mis. sudah kadung dipakai untuk transaksi lain)
      */
     public function deletePayment(SalesPayment $payment): void
     {
         DB::transaction(function () use ($payment) {
             $so = $payment->salesOrder()->lockForUpdate()->first();
+
+            if ($payment->cash_id) {
+                $this->cashService->decrease(Cash::findOrFail($payment->cash_id), (float) $payment->amount);
+            }
 
             $this->cashFlowService->deleteForSource($payment);
 
@@ -378,7 +414,9 @@ class SalesOrderService
      * memblokir adalah kalau ada item dari SO ini yang sudah terlanjur
      * diretur customer.
      *
-     * @throws \RuntimeException kalau ada item yang sudah diretur
+     * @throws \RuntimeException kalau ada item yang sudah diretur, atau saldo
+     *                            kas dari salah satu pembayaran tidak cukup
+     *                            untuk dikurangi (mis. sudah kadung dipakai)
      */
     public function delete(SalesOrder $so): void
     {
@@ -396,6 +434,12 @@ class SalesOrderService
             }
 
             foreach ($so->payments as $payment) {
+                // SO dihapus total → uang yang sempat diterima & masuk ke kas
+                // ini dianggap batal juga, jadi saldo kas dikembalikan (dikurangi).
+                if ($payment->cash_id) {
+                    $this->cashService->decrease(Cash::findOrFail($payment->cash_id), (float) $payment->amount);
+                }
+
                 $this->cashFlowService->deleteForSource($payment);
             }
 

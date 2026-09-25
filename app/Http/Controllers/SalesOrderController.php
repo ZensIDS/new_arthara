@@ -6,6 +6,7 @@ use App\Http\Requests\StoreSalesOrderRequest;
 use App\Http\Requests\StoreSalesPaymentRequest;
 use App\Http\Requests\UpdateSalesOrderRequest;
 use App\Http\Requests\UpdateSalesPaymentRequest;
+use App\Models\Cash;
 use App\Models\Customer;
 use App\Models\ExpenseCategory;
 use App\Models\Product;
@@ -117,7 +118,9 @@ class SalesOrderController extends Controller
     {
         $salesOrder->load(['customer', 'source', 'items.product', 'items.allocations.stockBatch', 'items.returnItems', 'payments', 'returns.items.product', 'otherCosts.category']);
 
-        return view('sales-orders.show', compact('salesOrder'));
+        $cashes = Cash::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
+
+        return view('sales-orders.show', compact('salesOrder', 'cashes'));
     }
 
     public function edit(SalesOrder $salesOrder)
@@ -205,6 +208,7 @@ class SalesOrderController extends Controller
                 initialPayment: $validated['initial_payment'] ?? null,
                 paymentMethod: $validated['payment_method'] ?? 'cash',
                 otherCosts: $validated['other_costs'] ?? [],
+                cash: isset($validated['cash_id']) ? Cash::find($validated['cash_id']) : null,
             );
         } catch (\RuntimeException $e) {
             // Termasuk error "stok tidak mencukupi" dari StockService::allocateFifo()
@@ -225,6 +229,7 @@ class SalesOrderController extends Controller
                 so: $salesOrder,
                 date: $validated['payment_date'],
                 amount: $validated['amount'],
+                cash: Cash::findOrFail($validated['cash_id']),
                 method: $validated['method'],
                 note: $validated['note'] ?? null,
             );
