@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -66,6 +67,7 @@ Route::middleware('auth')->group(function () {
 
     // Modul di bawah ini pakai pola index + modal (create/edit AJAX),
     // jadi cuma butuh route 'index' — store/update/destroy ada di grup superadmin.
+    Route::get('cashes', [CashController::class, 'index'])->name('cashes.index');
     Route::get('stock', [StockController::class, 'index'])->name('stock.index');
     Route::get('products', [ProductController::class, 'index'])->name('products.index');
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
@@ -143,6 +145,9 @@ Route::middleware(['auth', 'role:superadmin'])->group(function () {
         ->name('sales-orders.returns.store');
     Route::delete('sales-orders/{salesOrder}/returns/{return}', [SalesReturnController::class, 'destroy'])
         ->name('sales-orders.returns.destroy');
+
+    Route::resource('cashes', CashController::class)
+        ->only(['store', 'update', 'destroy']);
 
     Route::resource('products', ProductController::class)
         ->only(['store', 'update', 'destroy']);

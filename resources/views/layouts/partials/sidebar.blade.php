@@ -3,6 +3,9 @@
         'Ringkasan' => [
             ['label' => 'Dashboard', 'route' => 'dashboard', 'pattern' => 'dashboard'],
         ],
+        'Kas' => [
+            ['label' => 'Kas', 'route' => 'cashes.index', 'pattern' => 'cashes.*'],
+        ],
         'Pembelian' => [
             ['label' => 'Purchase Order', 'route' => 'purchase-orders.index', 'pattern' => 'purchase-orders.*'],
             ['label' => 'Supplier', 'route' => 'suppliers.index', 'pattern' => 'suppliers.*'],

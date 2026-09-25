@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             ProductSeeder::class, // wajib setelah CategorySeeder (butuh category_id)
             SupplierSeeder::class,
             CustomerSeeder::class,
+            CashSeeder::class,
         ]);
     }
 }
