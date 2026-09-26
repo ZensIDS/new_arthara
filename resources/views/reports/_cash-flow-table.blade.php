@@ -14,6 +14,7 @@
                 <tr class="text-left text-xs text-ink/40 uppercase tracking-wide border-b border-ink/[0.06]">
                     <th class="px-6 py-3 font-medium">Tanggal</th>
                     <th class="px-6 py-3 font-medium">Keterangan</th>
+                    <th class="px-6 py-3 font-medium">Kas</th>
                     <th class="px-6 py-3 font-medium">Arah</th>
                     <th class="px-6 py-3 font-medium text-right">Jumlah</th>
                 </tr>
@@ -23,6 +24,7 @@
                     <tr>
                         <td class="px-6 py-3 tnum whitespace-nowrap">{{ $row->transaction_date->format('d M Y') }}</td>
                         <td class="px-6 py-3 text-ink/70">{{ $row->description }}</td>
+                        <td class="px-6 py-3 text-ink/60">{{ $row->cash->name ?? '—' }}</td>
                         <td class="px-6 py-3">
                             <span class="text-xs font-medium rounded-full px-2.5 py-1
                                 {{ $row->direction === 'in' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">

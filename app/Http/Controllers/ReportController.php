@@ -60,9 +60,14 @@ class ReportController extends Controller
             return view('reports._cash-flow-table', compact('details', 'search'));
         }
 
+        // Saldo kas saat ini (bukan agregat periode) — supaya user langsung
+        // lihat posisi tiap akun kas di halaman ini juga.
+        $cashes = $this->reportService->cashBalances();
+
         return view('reports.cash-flow', [
             'data'      => $data,
             'details'   => $details,
+            'cashes'    => $cashes,
             'search'    => $search,
             'startDate' => $start,
             'endDate'   => $end,

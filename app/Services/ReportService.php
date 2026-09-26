@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cash;
 use App\Models\CashFlow;
 use App\Models\Expense;
 use App\Models\Income;
@@ -360,6 +361,7 @@ class ReportService
     public function cashFlowReport(string $startDate, string $endDate): array
     {
         $rows = CashFlow::whereBetween('transaction_date', [$startDate, $endDate])
+            ->with('cash:id,name')
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
             ->get();
@@ -399,11 +401,25 @@ class ReportService
         $search = trim((string) $search);
 
         return CashFlow::whereBetween('transaction_date', [$startDate, $endDate])
+            ->with('cash:id,name')
             ->when($search !== '', fn($q) => $q->where('description', 'like', "%{$search}%"))
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
             ->paginate($perPage)
             ->withQueryString();
+    }
+
+    /**
+     * Saldo kas saat ini per akun (bukan agregat periode — current_balance
+     * berjalan terus terlepas dari filter tanggal manapun). Dipakai di
+     * halaman Dashboard & Laporan Arus Kas supaya user langsung tahu saldo
+     * riil tiap kas tanpa harus buka menu Kas.
+     */
+    public function cashBalances()
+    {
+        return Cash::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'type', 'current_balance']);
     }
 
     /**

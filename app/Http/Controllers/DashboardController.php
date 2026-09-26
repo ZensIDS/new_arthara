@@ -53,6 +53,10 @@ class DashboardController extends Controller
             ->limit(5)
             ->get(['id', 'category_id', 'name', 'qty_on_hand']);
 
+        // Saldo kas saat ini per akun — bukan agregat periode, jadi tidak
+        // ikut terpengaruh filter tanggal di atas.
+        $cashes = $this->reportService->cashBalances();
+
         return view('dashboard', [
             'startDate'        => $startDateStr,
             'endDate'          => $endDateStr,
@@ -65,6 +69,7 @@ class DashboardController extends Controller
             'totalPayable'     => $totalPayable,
             'stockValue'       => (float) $stockValue,
             'lowStockProducts' => $lowStockProducts,
+            'cashes'           => $cashes,
         ]);
     }
 }

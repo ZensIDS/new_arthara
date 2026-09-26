@@ -29,6 +29,36 @@
         </div>
     </div>
 
+    {{-- Saldo kas saat ini per akun. Bukan agregat periode (beda dari KPI di
+         atas) — ini posisi riil sekarang, supaya user tidak perlu buka menu
+         Kas terpisah hanya untuk cek saldo. --}}
+    <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-ink/10 flex items-center justify-between gap-3">
+            <div>
+                <h2 class="font-display font-semibold">Saldo Kas Saat Ini</h2>
+                <p class="text-xs text-ink/40 mt-0.5">Posisi tiap akun kas sekarang, tidak terikat filter tanggal di atas</p>
+            </div>
+            <a href="{{ route('cashes.index') }}" class="text-xs font-medium text-amber-700 hover:text-amber-800 shrink-0">Kelola Kas &rarr;</a>
+        </div>
+        @if ($cashes->isEmpty())
+            <p class="px-6 py-8 text-sm text-ink/40 text-center">Belum ada akun kas aktif.</p>
+        @else
+            <div class="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 divide-y @2xl:divide-y-0 divide-ink/[0.06]">
+                @foreach ($cashes as $cash)
+                    <div class="px-6 py-4 @2xl:border-r @2xl:last:border-r-0 border-ink/[0.06] flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-medium truncate">{{ $cash->name }}</p>
+                            <span class="inline-flex items-center rounded-full bg-ink/[0.05] px-2 py-0.5 text-[11px] font-medium text-ink/60 mt-1">
+                                {{ $cash->type === 'bank' ? 'Bank' : 'Tunai' }}
+                            </span>
+                        </div>
+                        <span class="tnum font-display font-semibold shrink-0">Rp {{ number_format($cash->current_balance, 0, ',', '.') }}</span>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
     {{-- Grafik harian --}}
     <div class="rounded-2xl border border-ink/10 bg-white shadow-card overflow-hidden mb-6">
         <div class="px-6 py-4 border-b border-ink/10">

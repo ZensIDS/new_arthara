@@ -213,7 +213,7 @@ class ReportExportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Arus Kas');
 
-        $colSpan = 4;
+        $colSpan = 5;
         $period = 'Periode: ' . Carbon::parse($start)->translatedFormat('d M Y') . ' - ' . Carbon::parse($end)->translatedFormat('d M Y');
         $row = ExcelStyler::title($sheet, 'Laporan Arus Kas', $period, $colSpan);
 
@@ -223,28 +223,29 @@ class ReportExportController extends Controller
             ['label' => 'Kas Bersih', 'value' => $data['net_cash'], 'format' => ExcelStyler::FMT_RP, 'highlight' => true],
         ], $colSpan);
 
-        $row = ExcelStyler::header($sheet, $row, ['Tanggal', 'Keterangan', 'Arah', 'Jumlah']);
+        $row = ExcelStyler::header($sheet, $row, ['Tanggal', 'Keterangan', 'Kas', 'Arah', 'Jumlah']);
 
         // $data['details'] sudah terurut DESC (transaction_date lalu id) dari
         // ReportService::cashFlowReport() — tidak perlu di-sort ulang di sini.
         $details = $data['details']->map(fn($r) => [
             $r->transaction_date->format('d-m-Y'),
             $r->description,
+            $r->cash->name ?? '—',
             $r->direction === 'in' ? 'Masuk' : 'Keluar',
             $r->direction === 'in' ? $r->amount : -$r->amount,
         ]);
 
         $tableStart = $row;
-        $row = ExcelStyler::rows($sheet, $row, $details, currencyCols: [4], centerCols: [3]);
+        $row = ExcelStyler::rows($sheet, $row, $details, currencyCols: [5], centerCols: [4]);
 
         if ($details->isEmpty()) {
-            $sheet->mergeCells("A{$tableStart}:D{$tableStart}");
+            $sheet->mergeCells("A{$tableStart}:E{$tableStart}");
             $sheet->setCellValue("A{$tableStart}", 'Tidak ada transaksi kas pada periode ini.');
         } else {
-            ExcelStyler::totalsRow($sheet, $row, ['Total', '', '', $data['net_cash']], currencyCols: [4]);
+            ExcelStyler::totalsRow($sheet, $row, ['Total', '', '', '', $data['net_cash']], currencyCols: [5]);
         }
 
-        ExcelStyler::setColumnWidths($sheet, [14, 44, 12, 18]);
+        ExcelStyler::setColumnWidths($sheet, [14, 40, 18, 12, 18]);
 
         return ExcelStyler::download($spreadsheet, "laporan-arus-kas-{$start}_sd_{$end}.xlsx");
     }
