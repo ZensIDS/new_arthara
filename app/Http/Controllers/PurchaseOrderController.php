@@ -27,7 +27,7 @@ class PurchaseOrderController extends Controller
         $search    = trim((string) $request->input('search', ''));
 
         $purchaseOrders = PurchaseOrder::query()
-            ->with('supplier:id,name') // hanya kolom yang dipakai di tabel, bukan seluruh model supplier
+            ->with(['supplier:id,name', 'items:id,purchase_order_id,product_id,qty', 'items.product:id,name']) // hanya kolom yang dipakai di tabel
             ->when($startDate, fn($q) => $q->whereDate('po_date', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('po_date', '<=', $endDate))
             ->when($search !== '', function ($q) use ($search) {
@@ -37,6 +37,7 @@ class PurchaseOrderController extends Controller
                     $q->where('po_number', 'like', "%{$search}%")
                         ->orWhere('note', 'like', "%{$search}%")
                         ->orWhereHas('supplier', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('items.product', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
                         ->orWhere('total_amount', 'like', "%{$search}%")
                         ->orWhereRaw('(total_amount - paid_amount) LIKE ?', ["%{$search}%"])
                         ->orWhere('payment_status', $this->mapStatusSearch($search));

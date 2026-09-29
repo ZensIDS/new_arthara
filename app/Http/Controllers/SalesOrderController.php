@@ -28,7 +28,7 @@ class SalesOrderController extends Controller
         $search    = trim((string) $request->input('search', ''));
 
         $salesOrders = SalesOrder::query()
-            ->with(['customer:id,name', 'source:id,name']) // hanya kolom yang dipakai di tabel
+            ->with(['customer:id,name', 'source:id,name', 'items:id,sales_order_id,product_id,qty', 'items.product:id,name']) // hanya kolom yang dipakai di tabel
             // Dipakai buat kolom "Estimasi Untung" di tabel tanpa N+1 query
             // (accessor other_costs_total sendiri query per-baris kalau dipanggil langsung).
             ->withSum('otherCosts as other_costs_sum', 'amount')
@@ -42,6 +42,7 @@ class SalesOrderController extends Controller
                         ->orWhere('note', 'like', "%{$search}%")
                         ->orWhereHas('customer', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('source', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('items.product', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
                         ->orWhere('total_amount', 'like', "%{$search}%")
                         ->orWhereRaw('(total_amount - paid_amount) LIKE ?', ["%{$search}%"])
                         ->orWhere('payment_status', $this->mapStatusSearch($search));
